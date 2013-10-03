@@ -86,7 +86,7 @@
     <ClInclude Include="..\..\src\resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\..\src\LuaObGUI.rc" />
+    <ResourceCompile Include="..\..\src\luaob.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

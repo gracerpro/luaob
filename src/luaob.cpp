@@ -1,22 +1,21 @@
-/**
-
-*/
-#include "global.h"
+//
 #include "obfuscator.h"
+#include "global.h"
 
-void printHelp();
-int parseArguments(const int argc, char *argv[], std::string &globalExcludeFunctionFileName);
 
-using namespace Obfuscator;
+//void printHelp();
+//int parseArguments(int argc, char *argv[], std::string &globalExcludeFunctionFileName);
+
+
+
 
 void printHelp() {
-	printf("Lua obfuscator, Version 1.0\n");
-	printf("[-t FILE.toc] ");
-	printf("[--gef global_exclude_function_file_name] ");
-	printf("[-a[ppend] FILE.lua]\n");
+	printf("Lua obfuscator, Version 1.0");
+	printf("[--gef global_exclude_function_file_name]");
+	printf("[-a[ppend] FILE]");
 }
 
-int parseArguments(const int argc, char *argv[], std::string &tocFileName,
+int parseArguments(int argc, char *argv[], std::string &tocFileName,
 	std::string &globalExcludeFunctionFileName,
 	StringList &luaFiles)
 {
@@ -28,16 +27,19 @@ int parseArguments(const int argc, char *argv[], std::string &tocFileName,
 		if (!strcmp(arg, "-t")) {
 			if (++i < argc) {
 				tocFileName = argv[i];
+				++count;
 			}
 		}
 		else if (!strcmp(arg, "-gef")) {
 			if (++i < argc) {
 				globalExcludeFunctionFileName = argv[i];
+				++count;
 			}
 		}
 		else if (!strcmp(arg, "-a")) {
 			if (++i < argc) {
 				luaFiles.push_back(argv[i]);
+				++count;
 			}
 		}
 	}
@@ -51,33 +53,31 @@ int main(int argc, char *argv[]) {
 	std::string globalExcludeFunctionFileName;
 	std::string tocFileName;
 
-	if (argc <= 1) {
-		printHelp();
-		return 0;
-	}
-
 	parseArguments(argc, argv, tocFileName, globalExcludeFunctionFileName, luaFiles);
 
-	ReadAddonGlobalExcludeFunctions(globalExcludeFunctionFileName.data(), excludeGlobalFunctions);
+	LuaObfuscator::readAddonGlobalExcludeFunctions(globalExcludeFunctionFileName.c_str(), excludeGlobalFunctions);
 
-	ReadAddonTocFile(tocFileName.data(), luaFiles);
+	LuaObfuscator::readAddonTocFile(tocFileName.c_str(), luaFiles);
 
 	if (luaFiles.empty()) {
 		printf("No a files for an obfuscating\n");
 		return -1;
 	}
 
-	stObfuscator options;
+	stObfuscatorSetting settings;
 
 	// TODO: this is debug initialization
-	options.bCreateBakFile = false;
-	options.bCreateOneFile = false;
-	options.linesBetweenFiles = 3;
-	options.ObfuscateAddComment = false;
-	options.ObfuscateFunctionGlobal = false;
-	options.ObfuscateInteger = false;
-	options.ObfuscateLocalVasAndParam = false;
-	obfuscate(&options, luaFiles, excludeGlobalFunctions);
+	settings.bCreateBakFile = false;
+	settings.bCreateOneFile = false;
+	settings.linesBetweenFiles = 3;
+	settings.ObfuscateAddComment = false;
+	settings.ObfuscateFunctionGlobal = true;
+	settings.ObfuscateInteger = false;
+	settings.ObfuscateLocalVasAndParam = false;
+
+	LuaObfuscator obfuscator(luaFiles, excludeGlobalFunctions);
+
+	obfuscator.obfuscate(settings);
 
 	return 0;
 }
