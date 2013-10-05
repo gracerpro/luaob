@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
-
+#include <sstream>
+#include <time.h>
 
 static const char FUNCTION[] = "function";
 static const int FUNCTION_LEN = sizeof(FUNCTION) - 1;
@@ -28,13 +29,15 @@ LuaObfuscator::~LuaObfuscator() {
 
 }
 
-int LuaObfuscator::removeComments() {
-	char *p     = m_buffer;
-	char *pDest = m_buffer;
+int LuaObfuscator::removeComments(char *szLuaCode) {
+	char *p     = szLuaCode;
+	char *pDest = szLuaCode;
 
 	while (*p) {
-		if (isStringStart(p))
+		if (isStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
+			continue;
+		}
 
 		// TODO: endians
 		if (*((uint32_t*)p) == 0x5B5B2D2D) { // 0x5B5B2D2D== '[[--'
@@ -61,8 +64,8 @@ int LuaObfuscator::removeComments() {
  * Delete the new line chars.
  * TODO: each chunk must be ended ';'
  */
-int LuaObfuscator::removeNewLines() {
-	char *p = m_buffer;
+int LuaObfuscator::removeNewLines(char *szLuaCode) {
+	char *p = szLuaCode;
 
 	if (!p || !p[0])
 		return 0;
@@ -72,6 +75,10 @@ int LuaObfuscator::removeNewLines() {
 	while (*p && isNewLine(*p))
 		++p;
 	while (*p) {
+		if (isStringStart(p)) {
+			skipStringAndMove(&p, &pDest);
+			continue;
+		}
 		if (isNewLine(*p)) {
 			char cPrev = *(p - 1);
 			while (*p && isNewLine(*p))
@@ -82,10 +89,7 @@ int LuaObfuscator::removeNewLines() {
 				*(pDest++) = ' ';
 			continue;
 		}
-		else {
-			*(pDest++) = *p;
-		}
-		++p;
+		*(pDest++) = *p++;
 	}
 	if (isSpace(*(pDest - 1))) {
 		--pDest;
@@ -99,40 +103,44 @@ int LuaObfuscator::removeNewLines() {
 /*
  * p -- poiter to first char of delimer
  */
-void _deleteSpacesBeforeAfter(char **p, char **pDest, const int nDelimerSize,
-	const int nSpaceCount) {
+void deleteSpacesBeforeAfter(char **pp, char **pDest) {
+	char *p = *pp;
 
-	*pDest -= nSpaceCount;
-	char *pSpace = *p + nDelimerSize;
-	while (isSpace(*pSpace))
-		++pSpace;
-	int nSpaceAfterCount = pSpace - *p - nDelimerSize;
-	memmove(*pDest, *p, nDelimerSize);
-	*p += nSpaceAfterCount + nDelimerSize;
-	*pDest += nDelimerSize;
+	if (isspace(*(p - 1)))
+		--(*pDest);
+
+	**pDest = *p++;
+	++(*pDest);
+
+	if (isSpace(*p))
+		++p;
+	**pDest = *p++;
+	++(*pDest);
+
+	*pp = p;
 }
 
 /*
  * Delete the spaces near some characters
  */
-int LuaObfuscator::removeExtraWhitespace() {
+int LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
 	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#\n";
 
-	char *p = m_buffer;
+	char *p = szLuaCode;
+	char *pDest = p;
 
 	if (!p || !p[0])
 		return 0;
-
-	char *pDest = p;
-	int spaceCount = 0;
 
 	while (*p && isSpace(*p))
 		++p;
 
 	// delete dublicated spaces
 	while (*p) {
-		if (isStringStart(p))
+		if (isStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
+			continue;
+		}
 		if (!(isSpace(*p) && isSpace(*(p - 1)))) {
 			*pDest = *p;
 			++pDest;
@@ -141,22 +149,22 @@ int LuaObfuscator::removeExtraWhitespace() {
 	}
 	*pDest = 0;
 
-	pDest = m_buffer;
-	p     = m_buffer;
+	pDest = szLuaCode;
+	p     = szLuaCode;
 
 	// delete spaces near chars
 	while (*p) {
-		*pDest = *p;
-		if (isStringStart(p))
+		if (isStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
+			continue;
+		}
+		*pDest = *p;
 
 		if (strchr(arrClearChar, *p)) {
-			_deleteSpacesBeforeAfter(&p, &pDest, 1, spaceCount);
-			spaceCount = 0;
+			deleteSpacesBeforeAfter(&p, &pDest);
 			continue;
 		}
 
-		isSpace(*p) ? ++spaceCount : spaceCount = 0;
 		++pDest;
 		++p;
 	}
@@ -195,8 +203,6 @@ int LuaObfuscator::readAddonTocFile(char const *szTocFileName, StringList &luaFi
 		if (!buf[0])
 			continue;
 		char *pFile = strtrim(buf);
-		if (char *p = strchr(pFile, '\n'))
-			*p = 0;
 		if (pFile[0] && pFile[0] != '#') {
 			luaFiles.push_back(pFile);
 		}
@@ -314,7 +320,7 @@ int getGlobalFunctionName(char **szData, char *szFun) {
 	return p - *szData;
 }
 
-const char* generateFakeFunctionName()
+const char* LuaObfuscator::generateObfuscatedFunctionName()
 {
 	static char szFakeName[FAKE_FUNCTION_LEN + 2];
 
@@ -325,7 +331,7 @@ const char* generateFakeFunctionName()
 	return szFakeName;
 }
 
-int readGlobalFunctions(const char *szFileName, FakeFunctions &Functions)
+int LuaObfuscator::readGlobalFunctions(const char *szFileName, FakeFunctions &Functions)
 {
 	int count = 0;
 
@@ -344,8 +350,10 @@ int readGlobalFunctions(const char *szFileName, FakeFunctions &Functions)
 	memset(data + realSize, 0, 5);
 	char *p = data;
 	while (*p) {
-		if (isStringStart(p))
+		if (isStringStart(p)) {
 			skipStringAndMove(&p, NULL);
+			continue;
+		}
 
 		if (*((unsigned long*)p) == 0x636E7566) { // 'cnuf' backview 'func'
 			if (!strncmp(p, FUNCTION, FUNCTION_LEN)) {
@@ -354,7 +362,7 @@ int readGlobalFunctions(const char *szFileName, FakeFunctions &Functions)
 				if (trancSpaces && szFun[0]) {
 					stFakeFunction fun;
 					fun.name = szFun;
-					fun.fake_name = generateFakeFunctionName();
+					fun.fake_name = LuaObfuscator::generateObfuscatedFunctionName();
 					Functions[fun.name] = fun.fake_name;
 					++count;
 				}
@@ -435,8 +443,10 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &fakeFunctions,
 #endif
 	while (*p) {
 		*pDest = *p;
-		if (isStringStart(p))
+		if (isStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
+			continue;
+		}
 
 		char *pStart = p;
 		while (isAlphaFun(*p)) {
@@ -508,8 +518,535 @@ int LuaObfuscator::obfuscateGlobalFunctionNames() {
 	return size;
 }
 
+// Find end of function
+// p -- pointer to first byte of formal parameters
+char* findFunctionEnd(char *p)
+{
+	int nEnd = 0;
+
+	while (*p) {
+		if (isStringStart(p)) {
+			skipStringAndMove(&p, NULL);
+			continue;
+		}
+		// skip local functions, functions in parameters
+		if (*p == 'f') {
+			if (!strncmp(p, "for", 3) && !isalnum(*(p-1)) && !isalnum(*(p + 3)))
+				++nEnd;
+			else if (!strncmp(p, "function", 8) && !isalnum(*(p + 8)))
+				++nEnd;
+		}
+		// skip the "while", "for" and "if" constructions
+		else if (*p == 'w') {
+			if (!strncmp(p, "while", 5) && !isalnum(*(p-1)) && !isalnum(*(p + 5)))
+				++nEnd;
+		}
+		else if (*p == 'i') {
+			if (!strncmp(p, "if", 2) && !isalnum(*(p-1)) && !isalnum(*(p + 2)))
+				++nEnd;
+		}
+		else if (*p == 'e') {
+			if (!strncmp(p, "end", 3) && !isalnum(*(p - 1)) && !isalnum(*(p + 3))) {
+				--nEnd;
+				if (nEnd < 0)
+					return p - 1;
+			}
+		}
+
+		++p;
+	}
+
+	return p;
+}
+
+char const* LuaObfuscator::generateObfuscatedLocalVariableName() {
+	const int N = 7;
+	static char str[100];
+
+	for (int i = 0; i < N; ++i)
+		str[i] = szCharsFunName[rand() % CHARS_FUN_NAME_LEN];
+	str[N] = 0;
+	long l = static_cast<long>(time(NULL));
+	l ^= rand();
+	memset(&str[N], '0', 4);
+	ltoa(l, &str[N], 16);
+	str[N + 4] = 0;
+
+	return str;
+}
+
+// read and skipp all variables before '='
+// p -- pointer to "local" string
+char* readAndSkipLocalVariables(char *p, ObfuscatedItems &vars, char **ppDest)
+{
+	char *pDest = *ppDest;
+	int len;
+	char buf[100];
+	char *pStart, *pWordTrim;
+
+	pStart = p;
+	p = p + 5; // skip "local"
+	p = skipSpace(p);
+	len = p - pStart;
+	memcpy(pDest, pStart, len);
+	pDest += len;
+	char *pEqual = strchr(p, '=');
+	char cEqual = '=';
+	if (!pEqual) {
+		pEqual = strchr(p, ';');
+		cEqual = ';';
+	}
+	else if (!pEqual) {
+		pEqual = strchr(p, '\n');
+		cEqual = '\n';
+	}
+	else if (!pEqual) {
+		print("Syntax error\n");
+		return NULL;
+	}
+	*pEqual = 0;
+
+	while (p && *p) // TODO: disapear spaces
+	{
+		pStart = p;
+		p = skipSpace(p);
+		len = p - pStart;
+		memcpy(pDest, pStart, len);
+		pDest += len;
+
+		char *pTZ = strchr(p, ',');
+		if (pTZ) {
+			len = pTZ - p;
+			strncpy(buf, p, len);
+			buf[len] = 0;
+			pWordTrim = strtrim(buf);
+			p = pTZ + 1;
+		}
+		else {
+			strcpy(buf, p);
+			pWordTrim = strtrim(buf);
+			p = NULL;
+		}
+		if (pWordTrim) {
+			std::string str(pWordTrim);
+			StringMapConstIter item = vars.find(str);
+			if (item == vars.end()) {
+				char const *pObName = LuaObfuscator::generateObfuscatedLocalVariableName();
+				vars[str] = pObName;
+				len = strlen(pObName);
+				memcpy(pDest, pObName, len);
+				pDest += len;
+			}
+			else {
+				len = item->second.length();
+				memcpy(pDest, item->second.c_str(), len);
+				pDest += len;
+			}
+			if (p)
+				*(pDest++) = ',';
+			else
+				*pDest = cEqual;
+		}
+	}
+	*pEqual = cEqual;
+	*ppDest = pDest + 1;
+
+	return pEqual + 1;
+}
+
+/*
+ * pParamStart -- pointer to first char of formal parameters
+ */
+char* _obfuscateLocalVars(char *pParamStart, char *pBodyEnd, char *pDest)
+{
+	char *p = pParamStart;
+	ObfuscatedItems vars;
+	std::string str;
+	int nWordLen = 0;
+	int len;
+	char buf[200];
+	char *pBuf;
+	char const *pObFun;
+
+	char *pRightSk = strchr(p, ')');
+	if (!pRightSk) {
+		print("')' not found\n");
+		return NULL;
+	}
+	*pRightSk = 0;
+	char *pSemicolon = strchr(p, ',');
+	while (pSemicolon) {
+		len = pSemicolon - p;
+		strncpy(buf, p, len);
+		buf[len] = 0;
+		pBuf = strtrim(buf);
+		str.assign(pBuf);
+
+		pBuf = p;
+		while (isSpace(*pBuf))
+			++pBuf;
+		len = pBuf - p;
+		memcpy(pDest, p, len);
+		pDest += len;
+
+		if (str != "...") {
+			pObFun = LuaObfuscator::generateObfuscatedLocalVariableName();
+			vars[str] = pObFun;
+			len = strlen(pObFun);
+			memcpy(pDest, pObFun, len);
+			pDest += len;
+		}
+		else {
+			memcpy(pDest, "...", 3);
+			pDest += 3;
+		}
+
+		p = pSemicolon + 1;
+		pSemicolon = strchr(p, ',');
+		*(pDest++) = ',';
+	}
+	if (p[0]) {
+		pBuf = strtrim(p);
+		str.assign(pBuf);
+
+		pBuf = p;
+		while (isSpace(*pBuf))
+			++pBuf;
+		len = pBuf - p;
+		memcpy(pDest, p, len);
+		pDest += len;
+
+		if (str != "...") {
+			pObFun = LuaObfuscator::generateObfuscatedLocalVariableName();
+			vars[str] = pObFun;
+			len = strlen(pObFun);
+			memcpy(pDest, pObFun, len);
+			pDest += len;
+		}
+		else {
+			memcpy(pDest, "...", 3);
+			pDest += 3;
+		}
+	}
+	*(pDest++) = ')';
+	*pRightSk = ')';
+	p = pRightSk + 1;
+	char *pEnd = p;
+	skipSpaceAndNewLine(p);
+	len = p - pEnd;
+	memcpy(pDest, pEnd, len);
+	pDest += len;
+
+	char *pWord = p;
+	while (p <= pBodyEnd) {
+		*pDest = *p;
+		if (*p == '"') {
+			skipStringAndMove(&p, &pDest);
+			continue;
+		}
+
+	//	char szOp1[100];
+	//	char szOp2[100];
+	//	GetOperand(p, &len, true);
+
+		if (*p == 'l')
+		{
+			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5)))
+			{
+				p = readAndSkipLocalVariables(p, vars, &pDest);
+				nWordLen = 0;
+				pWord = p;
+				continue;
+			}
+		}
+
+		// in function parameters
+		//
+		if (isalnum(*p))
+			++nWordLen;
+		else
+		{
+			char *pBefore = p - nWordLen - 1;
+			if (nWordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.'))
+			{
+				str.assign(pWord, nWordLen);
+				StringMapConstIter iter = vars.find(str);
+				if (iter != vars.end())
+				{
+					len = iter->second.length();
+					pDest -= nWordLen;
+					memcpy(pDest, iter->second.c_str(), len); // TODO: -1
+					pDest += len;
+					*pDest = *p;
+				}
+			}
+			pWord = p + 1;
+			nWordLen = 0;
+		}
+
+		++pDest;
+		++p;
+	}
+
+	return pDest - 1;
+}
+
+/*
+ * function name(a, b, c)
+ * >>>start<<< body {end}
+ * end
+ */
+int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, char *szObfuscatedLuaCode) {
+	char *p = const_cast<char*>(szLuaCode);
+	char *pDest = szObfuscatedLuaCode;
+	StringList LocalVars;
+	int len;
+
+	while (*p) {
+		*pDest = *p;
+		if (*p == '"') {
+			skipStringAndMove(&p, &pDest);
+			continue;
+		}
+
+		// if
+		if (*((unsigned long*)p) == 0x636E7566) { // 'cnuf' backview 'func'
+			if (!strncmp(p, FUNCTION, FUNCTION_LEN) && !isalnum(*(p - 1))
+				&& !isalnum(*(p + FUNCTION_LEN)))
+			{
+				char *pFunStart = p;
+				p = strchr(p, '(');
+				if (!p) {
+					print("Syntax error. '(' not found near \"function\"\n");
+					return -1;
+				}
+				len = p - pFunStart + 1;
+				memcpy(pDest, pFunStart, len);
+				pDest += len;
+				++p; // skip '('
+				char *pParamStart = p; // + Formal parameters space
+				char *pBodyEnd = findFunctionEnd(p);
+				pDest = _obfuscateLocalVars(pParamStart, pBodyEnd, pDest);
+				p = pBodyEnd;
+			}
+		}
+		++pDest;
+		++p;
+	}
+	*pDest = 0;
+
+	return strlen(szObfuscatedLuaCode) - strlen(szLuaCode);
+}
+
+bool parseNumber(char** pp, char *szNumber) {
+	const char *p = *pp;
+	const char *pStart = p;
+
+	while (isdigit(*p)) // \0 is non digit
+		++p;
+	if (*p == '.') { // then number is float...
+		size_t sizeReal;
+
+		while (isdigit(*p))
+			++p;
+		if (*p == 'e' || *p == 'E') {
+			++p; // skip 'e';
+			++p; // skip '+' || '-'
+			while (isdigit(*p))
+				++p;
+		}
+		sizeReal = p - pStart;
+		strncpy(szNumber, pStart, sizeReal);
+		szNumber[sizeReal] = 0;
+		//double d = atof(szNumber); // atof(pStart)
+		// size_t sizeObfuscate = obfuscateFloat ...
+	}
+
+	return false;
+}
+
+/*
+ * Obfuscate the single string start with <p> and <size> bytes count
+ * into <stream>
+ */
+void LuaObfuscator::obfuscateSingleString(StringStream &stream, const char *p, size_t size) {
+	while (*p && size) {
+		stream << '\\' << unsigned int(*p);
+		--size;
+		++p;
+	}
+}
+
+/*
+ * Obfuscate the integer number start with <p> and <size> bytes count
+ * into <stream>
+ */
+void LuaObfuscator::obfuscateInt(StringStream &stream, const char *p, size_t size) {
+
+}
+
+/*
+ * Obfuscate the float number start with <p> and <size> bytes count
+ * into <stream>
+ */
+void LuaObfuscator::obfuscateFloat(StringStream &stream, const char *p, size_t size) {
+
+}
+
+/*
+ * Pass <szLuaCode>
+ * int:
+ *   0, 123, -123
+ *   1e-3, 1e+3, -1e-3, -1E+3
+ *              |_unary minus
+ * float:
+ *   0.0, 1.0, -1.0
+ *   1.01e-3, 1.01e+3, -1.01E+3, -1.01E-3
+ * string:
+ */
+int LuaObfuscator::obfuscateConst(const char *szLuaCode,
+	StringStream &obfuscatedLuaCode,
+	bool bInt, bool bFloat, bool bString)
+{
+	int size = 0;
+	char szNumber[100];
+
+	StringStream &stream = obfuscatedLuaCode;
+
+	char *p = const_cast<char*>(szLuaCode);
+	while (*p) {
+		// 0123456789+-Ee
+	/*	if (*p == '-') {
+			if (parseNumber(&p, szNumber)) {
+				stream << '-(' << szNumber << ')';
+				continue;
+			}
+			continue;
+		}
+		else if (isdigit(*p)) {
+			if (parseNumber(&p, szNumber)) {
+				stream << szNumber;
+				continue;
+			}
+		}
+		else */
+		if (isSingleStringStart(p)) {
+			int size = skipStringAndMove(&p, NULL);
+			stream << *(p - size);
+			obfuscateSingleString(stream, p - size + 1, size - 2);
+			stream << *(p - 1);
+		}
+
+		stream << *p;
+
+		++p;
+	}
+	stream << '\0';
+
+	return size;
+}
+
+size_t LuaObfuscator::generateFalseComment(char *szAddComment) {
+	size_t size = 2;
+	szAddComment[0] = '-';
+	szAddComment[1] = '-';
+	szAddComment[2] = '[';
+	szAddComment[3] = '[';
+
+	char arr[] = "1a!b2c@f3y#u4i$5a%e6f^l7p&8ad9z(q0)_+~";
+	const int N = sizeof(arr) - 1;
+
+	for (size_t i = 4; i < 14; ++i)
+		szAddComment[i] = arr[rand() % N];
+	size += 11;
+	szAddComment[++size] = ']';
+	szAddComment[++size] = ']';
+	szAddComment[++size] = 0;
+
+	return size;
+}
+
+int LuaObfuscator::addFalseComment() {
+	int size = 0;
+	// The list of false comment...
+	// or
+	// generate the false comment...
+
+	char szFileNameNew[MAX_PATH];
+
+	// read global functions
+	StringListConstIter iter = m_luaFiles.begin();
+	while (iter != m_luaFiles.end()) {
+		FILE *file = fopen(iter->c_str(), "rt");
+		if (!file) {
+			print("File not found: %s", iter->c_str());
+			++iter;
+			continue;
+		}
+		fseek(file, 0, SEEK_END);
+		long fileSize = ftell(file);
+		rewind(file);
+		char *pDataInSource = new char[fileSize + 20];
+		char *pDataIn = pDataInSource + 10;
+		memset(pDataInSource, 0, 10);
+		int realSize = fread(pDataIn, sizeof(char), fileSize, file);
+		memset(pDataIn + realSize, 0, 10);
+		fclose(file);
+
+		generateNewFileName(szFileNameNew, iter->c_str());
+
+		file = fopen(szFileNameNew, "wt");
+		char *p = pDataIn;
+		while (*p) {
+			if (isStringStart(p)) {
+				char *pStart = p;
+				int stringSize = skipStringAndMove(&p, NULL);
+				if (stringSize) {
+					fwrite(pStart, 1, stringSize, file);
+					//obfuscateSize += len + 1;
+					continue;
+				}
+				else {
+					print("Start of line are found, but end of line not found\n");
+					break;
+				}
+			}
+			if (strchr(";,\n+*/%^", *p)) {
+				char szAddComment[100];
+				int len = generateFalseComment(szAddComment);
+				fwrite(szAddComment, 1, len, file);
+				fputc(*p, file);
+				++p;
+			//obfuscateSize += len + 1;
+				continue;
+			}
+			fputc(*p, file);
+			//++obfuscateSize;
+			++p;
+		}
+		long obfuscateSize = ftell(file);
+		fclose(file);
+		delete[] pDataInSource;
+
+		print("%8d %s\n", obfuscateSize - fileSize, szFileNameNew);
+		size += obfuscateSize - fileSize;
+		++iter;
+	}
+
+	return size;
+}
+
+int LuaObfuscator::addFalseCode() {
+	int size = 0;
+	// The list of false code...
+	// or
+	// generate the false code...
+
+	return size;
+}
+
 #ifdef _DEBUG
-void SaveToFile(char *data, char const *szFile, char *postfix)
+void SaveToFile(const char *data, char const *szFile, char *postfix)
 {
 	char buf[FILENAME_MAX];
 
@@ -527,17 +1064,22 @@ void SaveToFile(char *data, char const *szFile, char *postfix)
 }
 #endif
 
+void printObfuscateResilt(const char *szResultName, const int commentSize) {
+	const int width = 35;
+
+	print("%-*s: %+d\n", width, szResultName, commentSize);
+}
+
 /*
  * Obfuscate the Lua's code in the files in list <fileList>
  * <excludeFunctions> contatins name of global function, for which don't make obfuscating
  * <obf> contains the some options
  */
-int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
-{
+int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 	FILE *fileNew, *fileOld;
 	char szFileNameNew[FILENAME_MAX];
 	int commentSize, spaceSize, newLineSize;
-	int nLocalVars, nIntReplace;
+	int localVarsSize, constIntSize, constFloatSize, constStringSize;
 	char *pDataIn, *pDataOut;
 
 	if (m_luaFiles.empty())
@@ -548,7 +1090,7 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
 	{
 		generateNewFileName(szFileNameNew, iter->c_str());
 
-		print("\tObfuscate file %s\n", iter->c_str());
+		print("%s\n", iter->c_str());
 
 		fileOld = fopen(iter->data(), "rt");
 		if (!fileOld) {
@@ -577,12 +1119,13 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
 		}
 		memset(pDataInSource, 0, 10);
 		memset(pDataInSource + size + 10 + ADDITIONAL_MEMORY, 0, 10);
-		size_t nSize = fread(pDataIn, 1, size, fileOld);
-		pDataIn[nSize] = 0;
-		pDataIn[nSize + 1] = 0;
+
+		size_t realSize = fread(pDataIn, 1, size, fileOld);
+		pDataIn[realSize] = 0;
+		pDataIn[realSize + 1] = 0;
 
 		char szFileBakup[FILENAME_MAX];
-		if (m_settings.bCreateBakFile) {
+		if (settings.bCreateBakFile) {
 			strcpy(szFileBakup, iter->c_str());
 			strcat(szFileBakup, ".bak");
 			FILE *fileBakup = fopen(szFileBakup, "wt");
@@ -595,34 +1138,52 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
 		commentSize = 0;
 		spaceSize = 0;
 		newLineSize = 0;
-		nIntReplace = 0;
-		nLocalVars = 0;
+		constIntSize = 0;
+		constFloatSize = 0;
+		constStringSize = 0;
+		localVarsSize = 0;
 
-		commentSize = removeComments();
+		commentSize = removeComments(pDataIn);
 #ifdef _DEBUG
 		SaveToFile(pDataIn, iter->c_str(), "1_comment");
 #endif
 
-		spaceSize = removeExtraWhitespace();
+		spaceSize = removeExtraWhitespace(pDataIn);
 #ifdef _DEBUG
 		SaveToFile(pDataIn, iter->c_str(), "2_spaces");
 #endif
 
-		newLineSize = removeNewLines();
+		newLineSize = removeNewLines(pDataIn);
 #ifdef _DEBUG
 		SaveToFile(pDataIn, iter->c_str(), "3_endline");
 #endif
 
-		const int nWidth = 32;
-		print("%-*s: %+d\n", nWidth, "Remove the Comment", commentSize);
-		print("%-*s: %+d\n", nWidth, "Remove the \"New line\"", newLineSize);
-		print("%-*s: %+d\n", nWidth, "Remove the spaces", spaceSize);
-		print("%-*s: %+d\n", nWidth, "Obfuscate integers", nIntReplace);
-		print("%-*s: %+d\n", nWidth, "Obfuscate local vars", nLocalVars);
+		StringStream str;
+		// DEBUG: HERE
+		obfuscateConst(pDataIn, str,
+			settings.ObfuscateConstInt, settings.ObfuscateConstFloat,
+			settings.ObfuscateConstString);
+#ifdef _DEBUG
+		SaveToFile(str.str().c_str(), iter->c_str(), "7_const");
+#endif
+		if (settings.ObfuscateLocalVasAndParam) {
+			localVarsSize = obfuscateLocalVarsAndParameters(pDataIn, pDataOut);
+#ifdef _DEBUG
+			SaveToFile(pDataOut, iter->c_str(), "7_local_vars");
+#endif
+		}
+
+		printObfuscateResilt("Remove the Comment", commentSize);
+		printObfuscateResilt("Remove the spaces", spaceSize);
+		printObfuscateResilt("Remove the \"New line\"", newLineSize);
+		printObfuscateResilt("Obfuscate constant integer numbers", constIntSize);
+		printObfuscateResilt("Obfuscate constant strings", constStringSize);
+		printObfuscateResilt("Obfuscate constant float numbers", constFloatSize);
+		printObfuscateResilt("Obfuscate local vars", localVarsSize);
 
 		fileNew = fopen(szFileNameNew, "wt");
 		if (!fileNew) {
-			print("Couldnt create file %s\n", szFileNameNew);
+			print("Couldn't create file %s\n", szFileNameNew);
 			fclose(fileOld);
 			return -1;
 		}
@@ -634,7 +1195,7 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
 		fclose(fileOld);
 		fclose(fileNew);
 
-		if (m_settings.bCreateBakFile) {
+		if (settings.bCreateBakFile) {
 			unlink(iter->c_str());
 			rename(szFileNameNew, iter->c_str());
 		}
@@ -642,10 +1203,18 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings)
 		++iter;
 	}
 
-	if (m_settings.ObfuscateFunctionGlobal) {
+	if (settings.ObfuscateGlobalFunctionName) {
 		print("\nObfuscate global functions\n");
 		int globalFunctionSize = obfuscateGlobalFunctionNames();
 		print("size: %+d\n", globalFunctionSize);
+	}
+
+	int addCommentSize = 0;
+	// TODO: may be replace this code in loop of each file (see above, local)
+	if (settings.ObfuscateAddFalseComment) {
+		print("\nAdd comment\n");
+		addCommentSize = addFalseComment();
+		print("Total size: %d\n", addCommentSize);
 	}
 
 	return 0;

@@ -5,8 +5,7 @@
 	#include <io.h>
 #endif
 
-void print(char const *format, ...)
-{
+void print(char const *format, ...) {
 	const int N = 1024;
 	char buf[N];
 	va_list va;
@@ -29,8 +28,7 @@ bool fileExists(const char *szFile) {
 #endif
 }
 
-char* GetFileDir(char const* szFile, char* szDir)
-{
+char* GetFileDir(char const* szFile, char* szDir) {
 	char const *p = strrchr(szFile, '\\');
 	if (!p)
 		p = strrchr(szFile, '/');
@@ -44,8 +42,7 @@ char* GetFileDir(char const* szFile, char* szDir)
 	return szDir;
 }
 
-char const* GetExeDir()
-{
+char const* GetExeDir() {
 	static char buf[MAX_PATH];
 
 	GetModuleFileName(NULL, buf, MAX_PATH);
@@ -55,8 +52,7 @@ char const* GetExeDir()
 	return buf;
 }
 
-char const* GetExeName()
-{
+char const* GetExeName() {
 	static char buf[MAX_PATH];
 
 	GetModuleFileName(NULL, buf, MAX_PATH);
@@ -64,17 +60,30 @@ char const* GetExeName()
 	return buf;
 }
 
-char* strtrim(char* sz)
-{
+bool isAbsoluteFilePath(const char *szFileName) {
+#ifdef _WIN32
+	return strchr(szFileName, ':') != NULL;
+#else
+	char *p = strchr(szFileName, '/');
+	if (p) {
+		if (p > szFileName) {
+			return *(p - 1) != '.';
+		}
+	}
+	return false;
+#endif
+}
+
+char* strtrim(char* sz) {
 	if (!sz || !sz[0])
 		return NULL;
 
 	char *p = sz;
-	while (*p && (*p == ' ' || *p == '\t'))
+	while (*p && (*p == ' ' || *p == '\t' || *p == '\n'))
 		++p;
 
 	char *pEnd = &p[strlen(p) - 1];
-	while (pEnd >= p && (*pEnd == ' ' || *pEnd == '\t'))
+	while (pEnd >= p && (*pEnd == ' ' || *pEnd == '\t' || *p == '\n'))
 		*(pEnd--) = 0;
 
 	return p;
@@ -85,6 +94,14 @@ char* strtrim(char* sz)
  */
 bool isStringStart(const char *p) {
 	return (*p == '"' || *p == '\'' || (*p == '[' && *(p + 1) == '['));
+}
+
+bool isSingleStringStart(const char *p) {
+	return (*p == '"' || *p == '\'');
+}
+
+bool isMultilineStringStart(const char *p) {
+	return (*p == '"' || *p == '\'');
 }
 
 bool isSpace(const char c) {
@@ -103,8 +120,8 @@ bool isAlphaFun(const char c) {
  * Skip the string in Lua's code and move a pointer
  * *pData -- pointer to "string"
 */
-int skipStringAndMove(char **pData, char **pDest) {
-	char *p = *pData;
+size_t skipStringAndMove(char **pData, char **pDest) {
+	const char *p = *pData;
 
 	if (*p == '"' || *p == '\'') {
 		const char cStart = *(p++);
@@ -116,12 +133,13 @@ int skipStringAndMove(char **pData, char **pDest) {
 						continue;
 					}
 				}
+				++p;
 				break;
 			}
 			++p;
 		}
 	}
-/*	else {
+	else {
 		while (*p && !(*p == ']' && *(p + 1) == ']')) {
 			++p;
 		}
@@ -129,10 +147,10 @@ int skipStringAndMove(char **pData, char **pDest) {
 			++p;
 		if (*p)
 			++p;
-	}*/
-	int size = p - *pData;
+	}
+	size_t size = p - *pData;
 	if (pDest) {
-		memmove(*pDest, *pData, size + 1);
+		memmove(*pDest, *pData, size);
 		*pDest += size;
 	}
 	*pData += size;

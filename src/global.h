@@ -13,6 +13,7 @@ char* GetFileDir(char const* szFile, char* szDir);
 
 char const* GetExeDir();
 char const* GetExeName();
+bool isAbsoluteFilePath(const char *szFileName);
 
 bool fileExists(const char *szFileName);
 
@@ -27,6 +28,14 @@ void print(char const *format, ...);
 #endif
 #define SZ_EXE_NAME         "luaob"
 
+#if defined(_WIN32)
+	#define PATH_SEPARATOR      "\\"
+	#define PATH_SEPARATOR_CHAR '\\'
+#else
+	#define PATH_SEPARATOR      "/"
+	#define PATH_SEPARATOR_CHAR '/'
+#endif
+
 /*
  * For obfuscator
  */
@@ -34,9 +43,11 @@ bool isSpace(const char c);
 bool isNewLine(const char c);
 bool isAlphaFun(const char c);
 bool isStringStart(const char *p);
+bool isSingleStringStart(const char *p);
+bool isMultilineStringStart(const char *p);
 bool isEscapedChar(const char* p);
 
-int skipStringAndMove(char **pData, char **pDest);
+size_t skipStringAndMove(char **pData, char **pDest);
 
 char* skipSpace(char *str, bool bForward = true);
 char* skipSpaceAndNewLine(char *str, bool bForward = true);
