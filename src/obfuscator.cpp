@@ -65,6 +65,7 @@ int LuaObfuscator::removeComments(char *szLuaCode) {
  * TODO: each chunk must be ended ';'
  */
 int LuaObfuscator::removeNewLines(char *szLuaCode) {
+	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#";
 	char *p = szLuaCode;
 
 	if (!p || !p[0])
@@ -85,8 +86,10 @@ int LuaObfuscator::removeNewLines(char *szLuaCode) {
 				++p;
 			if (cPrev == '\\')
 				*(pDest++) = 'n'; // within string here
-			else if (cPrev != ';')
-				*(pDest++) = ' ';
+			else if (cPrev != ';') {
+				if (!strchr(arrClearChar, cPrev))
+					*(pDest++) = ' ';
+			}
 			if (isSpace(*p))
 				++p;
 			continue;
@@ -565,10 +568,11 @@ const char* LuaObfuscator::generateObfuscatedLocalVariableName() {
 	for (int i = 0; i < N; ++i)
 		str[i] = szCharsFunName[rand() % CHARS_FUN_NAME_LEN];
 	str[N] = 0;
-	long l = static_cast<long>(time(NULL));
-	l ^= rand();
+	uint16_t w = static_cast<uint16_t>(time(NULL));
+	w ^= rand(); // xor 0xFFFF
 	memset(&str[N], '0', 4);
-	ltoa(l, &str[N], 16);
+	sprintf(&str[N], "%04X", w);
+	//itoa(w, &str[N], 16);
 	str[N + 4] = 0;
 
 	return str;
@@ -667,10 +671,12 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 	// Parse local variables...
 	p = pRightSk + 1; // first byte of function's body
 
-	stream << ')';
+	//stream << ')';
 
 	char *pEnd = p;
 	char *pWord = p;
+	char wordBuffer[300];
+	char *pWordBuffer = wordBuffer;
 	while (p <= pBodyEnd) {
 		if (isStringStart(p)) {
 			size_t size = skipStringAndMove(&p, NULL);
@@ -682,10 +688,8 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 	//	char szOp2[100];
 	//	GetOperand(p, &len, true);
 
-		if (*p == 'l')
-		{
-			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && isSpace(*(p + 5)))
-			{
+		if (*p == 'l') {
+			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && isSpace(*(p + 5))) {
 				stream << "local "; // *(p + 5) == ' ' or '\t'
 				p += 6;
 				p = readAndSkipLocalVariables(p, stream, vars);
@@ -695,151 +699,35 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 			}
 		}
 
+		if (isAlphaFun(*p)) {
+			++wordLen;
+			*pWordBuffer = *p;
+			++pWordBuffer;
+			++p;
+			continue;
+		}
+		else {
+			*pWordBuffer = 0;
+			char *pBefore = p - wordLen - 1;
+			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.')) {
+				str.assign(pWord, wordLen);
+				StringMapConstIter iter = vars.find(str);
+				if (iter != vars.end()) {
+					len = iter->second.length();
+					stream.write(iter->second.c_str(), len);
+				}
+				else {
+					stream << wordBuffer;
+				}
+			}
+			pWord = p + 1;
+			wordLen = 0;
+			pWordBuffer = wordBuffer;
+		}
+
 		stream << *p;
 		++p;
 	}
-
-	/*	// in function parameters
-		//
-		if (isalnum(*p))
-			++wordLen;
-		else
-		{
-			char *pBefore = p - wordLen - 1;
-			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.'))
-			{
-				str.assign(pWord, wordLen);
-				StringMapConstIter iter = vars.find(str);
-				if (iter != vars.end())
-				{
-					len = iter->second.length();
-					pDest -= wordLen;
-					memcpy(pDest, iter->second.c_str(), len); // TODO: -1
-					pDest += len;
-					*pDest = *p;
-				}
-			}
-			pWord = p + 1;
-			wordLen = 0;
-		}
-
-		++pDest;
-		++p;
-	}*/
-
-/*	char *pSemicolon = strchr(p, ',');
-	while (pSemicolon) {
-		len = pSemicolon - p;
-		strncpy(buf, p, len);
-		buf[len] = 0;
-		pBuf = strtrim(buf);
-		str.assign(pBuf);
-
-		pBuf = p;
-		while (isSpace(*pBuf))
-			++pBuf;
-		len = pBuf - p;
-		memcpy(pDest, p, len);
-		pDest += len;
-
-		if (str != "...") {
-			pObFun = LuaObfuscator::generateObfuscatedLocalVariableName();
-			vars[str] = pObFun;
-			len = strlen(pObFun);
-			memcpy(pDest, pObFun, len);
-			pDest += len;
-		}
-		else {
-			memcpy(pDest, "...", 3);
-			pDest += 3;
-		}
-
-		p = pSemicolon + 1;
-		pSemicolon = strchr(p, ',');
-		*(pDest++) = ',';
-	}
-	if (p[0]) {
-		pBuf = strtrim(p);
-		str.assign(pBuf);
-
-		pBuf = p;
-		while (isSpace(*pBuf))
-			++pBuf;
-		len = pBuf - p;
-		memcpy(pDest, p, len);
-		pDest += len;
-
-		if (str != "...") {
-			pObFun = LuaObfuscator::generateObfuscatedLocalVariableName();
-			vars[str] = pObFun;
-			len = strlen(pObFun);
-			memcpy(pDest, pObFun, len);
-			pDest += len;
-		}
-		else {
-			memcpy(pDest, "...", 3);
-			pDest += 3;
-		}
-	}
-	*(pDest++) = ')';
-	*pRightSk = ')';
-	p = pRightSk + 1;
-	char *pEnd = p;
-	skipSpaceAndNewLine(p);
-	len = p - pEnd;
-	memcpy(pDest, pEnd, len);
-	pDest += len;
-
-	char *pWord = p;
-	while (p <= pBodyEnd) {
-		*pDest = *p;
-		if (*p == '"') {
-			skipStringAndMove(&p, &pDest);
-			continue;
-		}
-
-	//	char szOp1[100];
-	//	char szOp2[100];
-	//	GetOperand(p, &len, true);
-
-		if (*p == 'l')
-		{
-			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5)))
-			{
-				p = readAndSkipLocalVariables(p, vars, &pDest);
-				wordLen = 0;
-				pWord = p;
-				continue;
-			}
-		}
-
-		// in function parameters
-		//
-		if (isalnum(*p))
-			++wordLen;
-		else
-		{
-			char *pBefore = p - wordLen - 1;
-			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.'))
-			{
-				str.assign(pWord, wordLen);
-				StringMapConstIter iter = vars.find(str);
-				if (iter != vars.end())
-				{
-					len = iter->second.length();
-					pDest -= wordLen;
-					memcpy(pDest, iter->second.c_str(), len); // TODO: -1
-					pDest += len;
-					*pDest = *p;
-				}
-			}
-			pWord = p + 1;
-			wordLen = 0;
-		}
-
-		++pDest;
-		++p;
-	}*/
 
 	return 0;
 }
@@ -865,28 +753,40 @@ int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, String
 
 		const int FUNCTION_LEN = sizeof("function") - 1;
 		if (*((unsigned long*)p) == 0x636E7566) { // 'cnuf' backview 'func'
-			if (!strncmp(p, "function", FUNCTION_LEN) && !isalnum(*(p - 1))
-				&& !isalnum(*(p + FUNCTION_LEN)))
+			if (!strncmp(p, "function", FUNCTION_LEN) && !isalnum(*(p + FUNCTION_LEN)))
 			{
-				char *pFunStart = p;
-				char *pFunEnd = p + FUNCTION_LEN; // skip ' '
-				char *pFunNameStart = pFunEnd + 1;
-				p = pFunNameStart;
-				// find function name
-				while (*p && *p != '(')
+				//if (p > szLuaCode && !isalnum(*(p + FUNCTION_LEN))) {
+					char *pFunStart = p;
+					char *pFunEnd = p + FUNCTION_LEN;
+					char *pFunNameStart = pFunEnd;
+
+					stream << "function";
+					if (isSpace(*pFunNameStart)) {
+						++pFunNameStart;
+						stream << " ";
+					}
+					p = pFunNameStart;
+					// find function name
+					while (*p && *p != '(')
+						++p;
+					size_t nameSize = p - pFunNameStart;
+					//if (pFunEnd == p - 1 )
+					//	continue;
+					if (*p != '(') {
+						print("Syntax error. '(' not found near \"function\"\n");
+						return -1;
+					}
+
+					if (nameSize)
+						stream.write(pFunNameStart, nameSize);
+					stream << "(";
 					++p;
-				if (pFunEnd == p - 1 )
+					char *pParamStart = p; // + Formal parameters space
+					char *pBodyEnd = findFunctionEnd(p);
+					obfuscateLocalVars(pParamStart, pBodyEnd, stream);
+					p = pBodyEnd + 1;
 					continue;
-				if (*p != '(') {
-					print("Syntax error. '(' not found near \"function\"\n");
-					return -1;
-				}
-				stream << "function(";
-				++p;
-				char *pParamStart = p; // + Formal parameters space
-				char *pBodyEnd = findFunctionEnd(p);
-				obfuscateLocalVars(pParamStart, pBodyEnd, stream);
-				p = pBodyEnd;
+				//}
 			}
 		}
 		stream << *p;

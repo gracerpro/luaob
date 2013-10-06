@@ -10,7 +10,7 @@ Obfuscator for Lua code. Target code is WoW's Lua and may be read the *.toc file
 * [always] Remove extra whitespace
 * [always] Remove extra new line symbols and replace him to semicolon
 * Replace global function names
-* Replace local variable names and formal parameter names
+* Replace local variable's names and argument's names
 * Replace string value to complex expression (escapes codes)
 * Add false comment
 
@@ -21,13 +21,12 @@ TODO:
 
 #Synopsis
 luaob [-t toc_file_name] [-gef global_exclude_functions_file_name] [-a FILE] [-dir DIRECTORY]
-[-opt-one_file] [-between_lines] [-opt-add_false_code] [-opt-add_false_comment] [-opt-const_float]
-[-opt-const_int] [-opt-const_string] [-opt-global_function] [-opt-local_function] [-opt-local_vars_args]
+[-opt-one_file] [-between_lines] [-opt-add_false_code] [-opt-add_false_comment] [-opt-const_float] [-opt-const_int] [-opt-const_string] [-opt-global_function] [-opt-local_function] [-opt-local_vars_args]
 
 #Options
-* *-t tocFileName* (The file name of *.toc file)
-* *-gef globalExcludeFunctionsFileName* (The file name of file, included global function names which must be exclude from obfuscating)
-* *-a FILE* (*.lua file name)
+* **-t tocFileName** (The file name of *.toc file)
+* **-gef globalExcludeFunctionsFileName** (The file name of file, included global function names which must be exclude from obfuscating)
+* **-a FILE** (*.lua file name)
 * -dir DIRECTORY (The search directory, must be one!)
 * -between_lines (count of \n between a lines in one obfuscated file)
 * -opt-one_file (Create one obfuscated file)

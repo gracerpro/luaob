@@ -1,6 +1,7 @@
 //
 #include "global.h"
 #include "obfuscator.h"
+#include <time.h>
 
 //void printHelp();
 //int parseArguments(int argc, char *argv[], std::string &globalExcludeFunctionFileName);
@@ -126,6 +127,8 @@ int main(int argc, char *argv[]) {
 	std::string tocFileName;
 	std::string addonDir;
 	stObfuscatorSetting settings;
+
+	srand(static_cast<unsigned int>(time(NULL)));
 
 	parseArguments(argc, argv, tocFileName, addonDir, globalExcludeFunctionFileName, luaFiles, settings);
 
