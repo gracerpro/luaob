@@ -16,14 +16,59 @@ void printHelp() {
 }
 
 int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string &addonDir,
-	std::string &globalExcludeFunctionFileName, StringList &luaFiles)
+	std::string &globalExcludeFunctionFileName, StringList &luaFiles,
+	stObfuscatorSetting &setting)
 {
 	int count = 0;
+
+	// sets default state
+	setting.bCreateOneFile = false;
+	setting.ObfuscateAddFalseCode = false;
+	setting.ObfuscateAddFalseComment = false;
+	setting.ObfuscateConstFloat = false;
+	setting.ObfuscateConstInt = false;
+	setting.ObfuscateConstString = false;
+	setting.ObfuscateGlobalFunctionName = false;
+	setting.ObfuscateLocalFunctionName = false;
+	setting.ObfuscateLocalVasAndParam = false;
+	setting.bCreateBakFile = true;
+	setting.linesBetweenFiles = 3;
 
 	for (int i = 1; i < argc; ++i) {
 		const char *arg = argv[i];
 
-		if (!strcmp(arg, "-t")) {
+		if (!strncmp(arg, "-opt-", 5)) {
+			const char *opt = arg + 5;
+
+			if (!strcmp(opt, "one_file")) {
+				setting.bCreateOneFile = true;
+			}
+			else if (!strcmp(opt, "add_false_code")) {
+				setting.ObfuscateAddFalseCode = true;
+			}
+			else if (!strcmp(opt, "add_false_comment")) {
+				setting.ObfuscateAddFalseComment = true;
+			}
+			else if (!strcmp(opt, "const_float")) {
+				setting.ObfuscateConstFloat = true;
+			}
+			else if (!strcmp(opt, "const_int")) {
+				setting.ObfuscateConstInt = true;
+			}
+			else if (!strcmp(opt, "const_string")) {
+				setting.ObfuscateConstString = true;
+			}
+			else if (!strcmp(opt, "global_function")) {
+				setting.ObfuscateGlobalFunctionName = true;
+			}
+			else if (!strcmp(opt, "local_function")) {
+				setting.ObfuscateLocalFunctionName = true;
+			}
+			else if (!strcmp(opt, "local_vars_args")) {
+				setting.ObfuscateLocalVasAndParam = true;
+			}
+		}
+		else if (!strcmp(arg, "-t")) {
 			if (++i < argc) {
 				tocFileName = argv[i];
 				++count;
@@ -47,6 +92,11 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 				if (addonDir[addonDir.length() - 1] != PATH_SEPARATOR_CHAR)
 					addonDir += PATH_SEPARATOR_CHAR;
 				++count;
+			}
+		}
+		else if (!strcmp(arg, "-between_lines")) {
+			if (++i < argc) {
+				setting.linesBetweenFiles = atoi(argv[i]);
 			}
 		}
 	}
@@ -75,8 +125,9 @@ int main(int argc, char *argv[]) {
 	std::string globalExcludeFunctionFileName;
 	std::string tocFileName;
 	std::string addonDir;
+	stObfuscatorSetting settings;
 
-	parseArguments(argc, argv, tocFileName, addonDir, globalExcludeFunctionFileName, luaFiles);
+	parseArguments(argc, argv, tocFileName, addonDir, globalExcludeFunctionFileName, luaFiles, settings);
 
 	LuaObfuscator::readAddonGlobalExcludeFunctions(globalExcludeFunctionFileName.c_str(), excludeGlobalFunctions);
 
@@ -91,20 +142,6 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	stObfuscatorSetting settings;
-
-	// TODO: this is debug initialization
-	settings.bCreateBakFile = false;
-	settings.bCreateOneFile = false;
-	settings.linesBetweenFiles = 3;
-	settings.ObfuscateAddFalseComment = false;
-	settings.ObfuscateGlobalFunctionName = true;
-	settings.ObfuscateLocalFunctionName = true;
-	settings.ObfuscateConstInt = false;
-	settings.ObfuscateConstFloat = false;
-	settings.ObfuscateConstString = false;
-	settings.ObfuscateLocalVasAndParam = false;
-
 	try {
 		LuaObfuscator obfuscator(luaFiles, excludeGlobalFunctions);
 
@@ -113,6 +150,10 @@ int main(int argc, char *argv[]) {
 	catch (std::exception) {
 		print("ERROR: obfuscator creating fail\n");
 	}
+
+#ifdef _DEBUG
+	getchar();
+#endif
 
 	return 0;
 }

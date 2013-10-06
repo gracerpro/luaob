@@ -31,8 +31,7 @@ typedef StringMap ObfuscatedItems;
 typedef std::stringstream StringStream;
 
 
-struct stObfuscatorSetting
-{
+struct stObfuscatorSetting {
 	bool ObfuscateGlobalFunctionName;
 	bool ObfuscateLocalFunctionName;
 	bool ObfuscateConstInt;
@@ -44,6 +43,25 @@ struct stObfuscatorSetting
 	bool bCreateBakFile;
 	bool bCreateOneFile;
 	int  linesBetweenFiles;
+};
+
+struct stObfuscatorStatistic {
+	unsigned singleCommentCount;
+	unsigned multilineCommentCount;
+	unsigned newLineCount; // TODO: delete
+	unsigned extraSpaceCount; // TODO: delete
+	unsigned intNumberCount;
+	unsigned floatNumberCount;
+	unsigned stringCount;
+	unsigned globalFunctionCount;
+	unsigned localFunctionCount;
+	unsigned localeVariableCount;
+	unsigned formalParameterCount;
+
+	unsigned addFalseCommentCount;
+	unsigned addFalseCommentSize;
+	unsigned addFalseCodeCount;
+	unsigned addFalseCodeSize;
 };
 
 const int ADDITIONAL_MEMORY = 4096 * 2;
@@ -64,11 +82,13 @@ public:
 		StringList &FunctionsExclude);
 
 	friend char* readAndSkipLocalVariables(char*, ObfuscatedItems&, char**);
-	friend char* _obfuscateLocalVars(char*, char*, char*);
+	friend char* obfuscateLocalVars(const char*, char const*, StringStream&);
+	friend char* readAndSkipLocalVariables(char*, StringStream&, ObfuscatedItems&);
 
 protected:
 	int removeComments(char *szLuaCode);
 	int removeExtraWhitespace(char *szLuaCode);
+	int removeDumplicatedChars(char *szLuaCode); // ' ' and '\n' and '\t'
 	int removeNewLines(char *szLuaCode);
 
 	void obfuscateInt(StringStream &stream, const char *p, size_t size);
@@ -78,13 +98,14 @@ protected:
 
 	int obfuscateConst(const char *szLuaCode, StringStream &obfuscatedLuaCode, bool bInt, bool bFloat, bool bString);
 	int obfuscateGlobalFunctionNames();
-	int obfuscateLocalVarsAndParameters(const char *szLuaCode, char *szObfuscatedLuaCode);
+	int obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode);
 	int addFalseComment();
 	int addFalseCode();
 
 private:
-	const StringList m_luaFiles;
-	const StringList m_excludeFunctions;
+	const StringList       m_luaFiles;
+	const StringList       m_excludeFunctions;
+	stObfuscatorStatistic  m_statistic;
 
 	static const char* generateObfuscatedFunctionName();
 	static const char* generateObfuscatedLocalVariableName(); // and arguments
