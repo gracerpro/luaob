@@ -65,7 +65,7 @@ int LuaObfuscator::removeComments(char *szLuaCode) {
  * TODO: each chunk must be ended ';'
  */
 int LuaObfuscator::removeNewLines(char *szLuaCode) {
-	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#";
+	char const *arrClearChar = "})[].,;+-*/^%<>~=#";
 	char *p = szLuaCode;
 
 	if (!p || !p[0])
@@ -86,9 +86,8 @@ int LuaObfuscator::removeNewLines(char *szLuaCode) {
 				++p;
 			if (cPrev == '\\')
 				*(pDest++) = 'n'; // within string here
-			else if (cPrev != ';') {
-				if (!strchr(arrClearChar, cPrev))
-					*(pDest++) = ' ';
+			else if (cPrev != ';' && cPrev != ')') {
+				*(pDest++) = ' ';
 			}
 			if (isSpace(*p))
 				++p;
@@ -199,7 +198,7 @@ int LuaObfuscator::readAddonTocFile(char const *szTocFileName, StringList &luaFi
 		return 0;
 	}
 
-	//files.clear();
+	//files.str("");
 	while (!feof(fileToc) && fgets(buf, 300, fileToc)) {
 		if (!buf[0])
 			continue;
@@ -585,10 +584,6 @@ const char* LuaObfuscator::generateObfuscatedLocalVariableName() {
  */
 char* readAndSkipLocalVariables(char *p, StringStream &stream, ObfuscatedItems &vars)
 {
-	int len;
-	char buf[100];
-	char *pStart, *pWordTrim;
-
 	char *pEqual = strchr(p, '=');
 	char cEqual = '=';
 	if (!pEqual) {
@@ -629,6 +624,289 @@ char* readAndSkipLocalVariables(char *p, StringStream &stream, ObfuscatedItems &
 }
 
 /*
+ * params:
+ *   pArgumentStart -- first byte of arguments
+ * return:
+ *   first byte of function's body
+ */
+static char* readAndObfuscateFunctionArguments(char *pArgumentStart, LocalVars &vars,
+	StringStream &stream)
+{
+	char *p = pArgumentStart;
+
+	const char *pRightSk = strchr(p, ')');
+	if (!pRightSk) {
+		print("Parsing error. ')' not found near arguments\n");
+		return p;
+	}
+
+	// Find agruments...
+	do {
+		const char *pStart = p;
+
+		while (*p != ',' && p < pRightSk)
+			++p;
+		size_t size = p - pStart;
+		if (size) {
+			std::string str(pStart, size);
+			if (str != "...") {
+				const char *szObVarName = LuaObfuscator::generateObfuscatedLocalVariableName();
+				vars[str] = szObVarName;
+				stream << szObVarName << *p; // *p == ',' or ')'
+			}
+			else {
+				stream << "..." << *p;
+			}
+		}
+		++p;
+	}
+	while (p < pRightSk);
+
+	return p;
+}
+
+/*
+ * Read function name
+ * p -- pointer to first byte after string "function"
+ * "... function"
+ *              |_ here
+ */
+char* readFunctionName(char *p, StringStream &stream)
+{
+	char *pFunNameStart = p + 8;
+
+	stream << "function";
+	if (isSpace(*pFunNameStart)) {
+		stream << *pFunNameStart;
+		++pFunNameStart;
+	}
+	p = pFunNameStart;
+	// find function name
+	while (*p && isAlphaFun(*p))
+		++p;
+	if (*p != '(') {
+		printf("parse error, '(' not found near function name\n");
+		return p;
+	}
+	size_t nameSize = p - pFunNameStart;
+	if (nameSize) {
+		stream.write(pFunNameStart, nameSize);
+	}
+	stream << '(';
+
+	return p + 1;
+}
+
+/*
+ * p -- pointer to ferst byte of local variable
+ * example:
+ *   locale var1, var2, var3;
+ *          |_ this is first byte
+ * Read the locale variables
+ * and obfuscate them names
+ * and push equal variables
+ */
+char* readAndObfuscateLocaleVariables(char *p, LocalVars &varsLocal, LocalVars &varsBlock,
+	StringStream &stream)
+{
+	char *pEqual = strchr(p, '=');
+	char cEqual = '=';
+	if (!pEqual) {
+		pEqual = strchr(p, ';');
+		cEqual = ';';
+	}
+	else if (!pEqual) {
+		pEqual = strchr(p, '\n');
+		cEqual = '\n';
+	}
+	else if (!pEqual) {
+		print("Parse error near locale variables\n");
+		return p;
+	}
+
+	while (p < pEqual) {
+		char *pStart = p;
+		while (isAlphaFun(*p))
+			++p;
+		size_t len = p - pStart;
+		if (len) {
+			std::string str(pStart, len);
+			StringMapConstIter item = varsLocal.find(str);
+			if (item != varsLocal.end()) {
+				// PUSH
+				char const *pObName = LuaObfuscator::generateObfuscatedLocalVariableName();
+				varsLocal[str] = pObName;
+				stream << item->second.c_str() << *p;
+			}
+			else {
+				char const *pObName = LuaObfuscator::generateObfuscatedLocalVariableName();
+				varsBlock[str] = pObName;
+				//varsLocal[str] = pObName;
+				stream << pObName << *p;
+			}
+		}
+		++p;
+	}
+
+	return pEqual + 1;
+}
+
+size_t popLocalVariables(LocalVars &varsLocal, LocalVars &varsBlock) {
+	StringMapConstIter iter = varsBlock.begin();
+	size_t count = 0;
+
+/*	for ( ; iter != varsBlock.end(); ++iter) {
+		StringMapConstIter iterFind = varsLocal.find(iter->first);
+		if (iterFind != varsLocal.end()) {
+			varsLocal[iter->first] = varsBlock[iter->first];
+		}
+		else
+			varsLocal.erase(iter);
+		++count;
+	}*/
+
+	return count;
+}
+
+/*
+ * params:
+ *   pBlockBodyStart -- pointer to first byte of block's body
+ *   varsLocal -- list of agrument's names, level up variables
+ * blocks:
+ *   1) function(...) block end
+ *   2) do block end
+ *   3) for ... do block end
+ *   4) while ... do block end
+ *   5) if ... then block end
+ *   6) function type, this is similar to function, see item 1)
+ *  =============================
+ *  obfuscate until not found "end" of current block
+ *
+ * return:
+ *   first byte after block's body
+ */
+static char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
+	StringStream &stream)
+{
+	char *p = const_cast<char*>(pBlockBodyStart);
+	int blockLevel = 0; // current block
+	size_t wordLen = 0;
+	char wordBuffer[300];
+	char *pWordBuffer = wordBuffer;
+	LocalVars varsBlock;
+
+	while (*p) {
+		if (isStringStart(p)) {
+			size_t size = skipStringAndMove(&p, NULL);
+			stream.write(p - size, size);
+			continue;
+		}
+
+		// skip local functions, functions in parameters
+		if (*p == 'd') {
+			if (!strncmp(p, "do", 2) && !isalnum(*(p - 1)) && !isalnum(*(p + 2))) {
+				stream << "do" << *(p + 2);
+				char *pBodyStart = p + 2 + 1;
+				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+			}
+		}
+		else if (*p == 'r') { // TODO: repeat block
+			if (!strncmp(p, "repeat", 6) && !isalnum(*(p - 1)) && !isalnum(*(p + 6))) {
+				stream << "repeat" << *(p + 6);
+				char *pBodyStart = p + 6 + 1;
+				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+			}
+		}
+		else if (*p == 'f') {
+			if (!strncmp(p, "function", 8) && !isalnum(*(p + 8))) {
+				LocalVars vars;
+				p = readFunctionName(p, stream);
+				p = readAndObfuscateFunctionArguments(p, vars, stream);
+				p = obfuscateLocalVarsInBlock(p, vars, stream);
+			}
+		}
+		// skip the "while", "for" and "if" constructions
+		else if (*p == 't') {
+			if (!strncmp(p, "then", 4) && !isalnum(*(p-1)) && !isalnum(*(p + 4))) {
+				stream << "then" << *(p + 4);
+				char *pBodyStart = p + 4 + 1;
+				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+			}
+		}
+		else if (*p == 'e') {
+			if (!strncmp(p, "end", 3) && !isalnum(*(p - 1)) && !isalnum(*(p + 3))) {
+				stream << "end";
+				// pop the equal variables...
+				popLocalVariables(varsLocal, varsBlock);
+				return p + 3;
+			}
+			if (!strncmp(p, "elseif", 3) && !isalnum(*(p - 1)) && !isalnum(*(p + 6))) {
+				stream << "elseif";
+				// pop the equal variables...
+				popLocalVariables(varsLocal, varsBlock);
+				return p + 6;
+			}
+		}
+		else if (*p == 'u') {
+			if (!strncmp(p, "until", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5))) {
+				stream << "until";
+				// pop the equal variables...
+				popLocalVariables(varsLocal, varsBlock);
+				return p + 5;
+			}
+		}
+		else if (*p == 'l') {
+			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5))) {
+				stream << "local" << *(p + 5);
+				p += 6;
+				// push(save) the equal variables...
+				p = readAndObfuscateLocaleVariables(p, varsLocal, varsBlock, stream);
+				// DEBUG...
+			}
+		}
+
+		if (isAlphaFun(*p)) {
+			++wordLen;
+			*pWordBuffer = *p;
+			++pWordBuffer;
+			++p;
+			continue;
+		}
+		else {
+			*pWordBuffer = 0;
+			char *pBefore = p - wordLen - 1;
+			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.')) {
+				std::string str(wordBuffer);
+				StringMapConstIter iter = varsBlock.find(str);
+				if (iter != varsBlock.end()) {
+					size_t len = iter->second.length();
+					stream.write(iter->second.c_str(), len);
+				}
+				else {
+					iter = varsLocal.find(str);
+					if (iter != varsLocal.end()) {
+						size_t len = iter->second.length();
+						stream.write(iter->second.c_str(), len);
+					}
+					else {
+						stream << wordBuffer;
+					}
+				}
+			}
+			wordLen = 0;
+			pWordBuffer = wordBuffer;
+		}
+
+		stream << *p;
+		++p;
+	}
+
+	// pop the equal variables...
+
+	return p;
+}
+
+/*
  * pParamStart -- pointer to first char of formal parameters
  */
 char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringStream &stream) {
@@ -637,8 +915,6 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 	std::string str;
 	size_t wordLen = 0;
 	size_t len;
-	char buf[200];
-	char *pBuf;
 
 	char *pRightSk = strchr(p, ')');
 	if (!pRightSk) {
@@ -669,10 +945,19 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 	while (p < pRightSk);
 
 	// Parse local variables...
+	/*
+	in the block local variables difference!
+	block:
+		do <block> end
+		for ... do <block> end
+		while ... do <block> end
+		if ... then <block> end
+	*/
 	p = pRightSk + 1; // first byte of function's body
 
 	//stream << ')';
 
+	int blockLevel = 0;
 	char *pEnd = p;
 	char *pWord = p;
 	char wordBuffer[300];
@@ -682,6 +967,13 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 			size_t size = skipStringAndMove(&p, NULL);
 			stream.write(p - size, size);
 			continue;
+		}
+
+		if (!strncmp(p, "do", 2) && !isalpha(*(p - 1)) && !isalpha(*(p + 2))) {
+			++blockLevel;
+		}
+		else if (!strncmp(p, "if", 2) && !isalpha(*(p - 1)) && !isalpha(*(p + 2))) {
+			++blockLevel;
 		}
 
 	//	char szOp1[100];
@@ -733,17 +1025,24 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
 }
 
 /*
- * function name(a, b, c)
- * >>>start<<< body {end}
- * end
+ * Recurcive function
+ * Obfuscated all local variables in code
+ * Example:
+ *   local varName = 123
+ *   local abrakadabra = 123
  */
 int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode) {
+	LocalVars vars;
 	char *p = const_cast<char*>(szLuaCode);
-	StringList LocalVars;
-	StringStream &stream = obfuscatedLuaCode;
-	int len;
 
-	stream.clear();
+	obfuscatedLuaCode.str("");
+	obfuscateLocalVarsInBlock(p, vars, obfuscatedLuaCode);
+
+	return obfuscatedLuaCode.str().size() - strlen(szLuaCode);
+
+/*	StringStream &stream = obfuscatedLuaCode;
+
+	stream.str("");
 	while (*p) {
 		if (isStringStart(p)) {
 			size_t size = skipStringAndMove(&p, NULL);
@@ -781,10 +1080,13 @@ int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, String
 						stream.write(pFunNameStart, nameSize);
 					stream << "(";
 					++p;
+					LocalVars vars;
 					char *pParamStart = p; // + Formal parameters space
-					char *pBodyEnd = findFunctionEnd(p);
-					obfuscateLocalVars(pParamStart, pBodyEnd, stream);
-					p = pBodyEnd + 1;
+					p = readAndObfuscateFunctionArguments(pParamStart, vars, stream);
+					//char *pBodyEnd = findFunctionEnd(p);
+					//p = obfuscateLocalVars(pParamStart, pBodyEnd, stream);
+					p = obfuscateLocalVarsInBlock(p, vars, stream);
+					//p = pBodyEnd + 1;
 					continue;
 				//}
 			}
@@ -792,9 +1094,9 @@ int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, String
 		stream << *p;
 		++p;
 	}
-	//*pDest = 0;
 
-	return 0; //return strlen(szObfuscatedLuaCode) - strlen(szLuaCode);
+	return stream.str().size() - strlen(szLuaCode);
+	*/
 }
 
 bool parseNumber(char** pp, char *szNumber) {
@@ -1040,7 +1342,6 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 	char szFileNameNew[FILENAME_MAX];
 	int commentSize, spaceSize, newLineSize, duplicateCharsSize;
 	int localVarsSize, constIntSize, constFloatSize, constStringSize;
-	char *pDataIn, *pDataOut;
 
 	if (m_luaFiles.empty())
 		return 0;
@@ -1052,6 +1353,7 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		fileOld = fopen(iter->data(), "rt");
 		if (!fileOld) {
 			print("ERROR: Open file fail\n");
+			++iter;
 			continue;
 		}
 
@@ -1059,27 +1361,20 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		long size = ftell(fileOld);
 		rewind(fileOld);
 
-		char *pDataInSource = new char[size + 20 + ADDITIONAL_MEMORY]; // + 20 for additional 10_"data"_10
-		pDataIn = pDataInSource + 10; // for delete/clear data
-		char *pDataOutSource = new char[size + 20 + ADDITIONAL_MEMORY]; // for add data
-		pDataOut = pDataOutSource + 10;
+		char *pDataInSource = new char[size + 5];
+		char *pDataIn = pDataInSource + 2; // for delete/clear data
 		if (!pDataInSource) {
 			fclose(fileOld);
-			print("Try to alloc memory failed, size %d\n", size + 20);
+			print("Try to alloc memory failed, size %d\n", size + 5);
 			return 0;
 		}
-		if (!pDataOutSource) {
-			fclose(fileOld);
-			delete[] pDataInSource;
-			print("Try to alloc memory failed, size %d\n", size + 20 + ADDITIONAL_MEMORY);
-			return 0;
-		}
-		memset(pDataInSource, 0, 10);
-		memset(pDataInSource + size + 10 + ADDITIONAL_MEMORY, 0, 10);
 
 		size_t realSize = fread(pDataIn, 1, size, fileOld);
+		pDataIn[-1] = 0; // \0\0...............\0\0
+		pDataIn[-2] = 0;
 		pDataIn[realSize] = 0;
 		pDataIn[realSize + 1] = 0;
+
 
 		char szFileBakup[FILENAME_MAX];
 		if (settings.bCreateBakFile) {
@@ -1107,31 +1402,41 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 #endif
 		duplicateCharsSize = removeDumplicatedChars(pDataIn);
 #ifdef _DEBUG
-		SaveToFile(pDataIn, iter->c_str(), "1_dublicate");
+		SaveToFile(pDataIn, iter->c_str(), "2_dublicate");
 #endif
 
 		spaceSize = removeExtraWhitespace(pDataIn);
 #ifdef _DEBUG
-		SaveToFile(pDataIn, iter->c_str(), "2_spaces");
+		SaveToFile(pDataIn, iter->c_str(), "3_spaces");
 #endif
 
 		newLineSize = removeNewLines(pDataIn);
 #ifdef _DEBUG
-		SaveToFile(pDataIn, iter->c_str(), "3_endline");
+		SaveToFile(pDataIn, iter->c_str(), "4_endline");
 #endif
 
-		StringStream str, strOut;
-		// DEBUG: HERE
-		obfuscateConst(pDataIn, str,
-			settings.ObfuscateConstInt, settings.ObfuscateConstFloat,
+		StringStream strIn, strOut;
+
+		if (settings.ObfuscateConstInt || settings.ObfuscateConstFloat ||
+			settings.ObfuscateConstString)
+		{
+			obfuscateConst(pDataIn, strOut, settings.ObfuscateConstInt, settings.ObfuscateConstFloat,
 			settings.ObfuscateConstString);
 #ifdef _DEBUG
-		SaveToFile(str.str().c_str(), iter->c_str(), "7_const");
+			SaveToFile(strOut.str().c_str(), iter->c_str(), "5_const");
 #endif
+		}
+		else {
+			strOut.str("");
+			strOut << pDataIn;
+		}
+
+		strIn.str("");
+		strIn << strOut.str();
 		if (settings.ObfuscateLocalVasAndParam) {
-			localVarsSize = obfuscateLocalVarsAndParameters(str.str().c_str(), strOut);
+			localVarsSize = obfuscateLocalVarsAndParameters(strIn.str().c_str(), strOut);
 #ifdef _DEBUG
-			SaveToFile(strOut.str().c_str(), iter->c_str(), "7_local_vars");
+			SaveToFile(strOut.str().c_str(), iter->c_str(), "6_local_vars");
 #endif
 		}
 
@@ -1155,7 +1460,6 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		fwrite(pDataIn, 1, strlen(pDataIn), fileNew);
 
 		delete[] pDataInSource;
-		delete[] pDataOutSource;
 
 		fclose(fileOld);
 		fclose(fileNew);

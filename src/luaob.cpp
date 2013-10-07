@@ -10,10 +10,22 @@
 
 
 void printHelp() {
-	print("\tLua obfuscator, Version 1.0\n");
+	print("=============== Lua obfuscator, Version 1.0\n");
+	print("===== Copyright (C) 2013, Gracer <gracerpro@gmail.com>\n");
+	print("[-t tocFileName]\n");
 	print("[-gef global_exclude_function_file_name]\n");
-	print("[-dir directory_name]\n");
 	print("[-a FILE]\n");
+	print("[-dir DIRECTORY]\n");
+	print("[-between_lines line_count]\n");
+	print("[-opt-one_file]\n");
+	print("[-opt-add_false_code]\n");
+	print("[-opt-add_false_comment]\n");
+	print("[-opt-const_float]\n");
+	print("[-opt-const_int]\n");
+	print("[-opt-const_string]\n");
+	print("[-opt-global_function]\n");
+	print("[-opt-local_function]");
+	print("[-opt-local_vars_args]");
 }
 
 int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string &addonDir,
@@ -90,7 +102,8 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 		else if (!strcmp(arg, "-dir")) {
 			if (++i < argc) {
 				addonDir = argv[i];
-				if (addonDir[addonDir.length() - 1] != PATH_SEPARATOR_CHAR)
+				char c = addonDir[addonDir.length() - 1];
+				if (!(c == '/' || c == '\\'))
 					addonDir += PATH_SEPARATOR_CHAR;
 				++count;
 			}
@@ -108,7 +121,7 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 void validateFileNames(StringList &luaFiles, const char *szAddonDir = NULL) {
 	StringListIter iter = luaFiles.begin();
 
-	if (!szAddonDir)
+	if (!szAddonDir || !szAddonDir[0])
 		szAddonDir = GetExeDir();
 
 	while (iter != luaFiles.end()) {

@@ -27,6 +27,7 @@ typedef std::map<std::string, std::string>::const_iterator  StringMapConstIter;
 typedef StringSet FunctionSet;
 typedef StringMap FakeFunctions;
 typedef StringMap ObfuscatedItems;
+typedef StringMap LocalVars;
 
 typedef std::stringstream StringStream;
 
@@ -84,6 +85,9 @@ public:
 	friend char* readAndSkipLocalVariables(char*, ObfuscatedItems&, char**);
 	friend char* obfuscateLocalVars(const char*, char const*, StringStream&);
 	friend char* readAndSkipLocalVariables(char*, StringStream&, ObfuscatedItems&);
+	friend char* obfuscateLocalVarsInBlock(char*, LocalVars&, StringStream&);
+	friend char* readAndObfuscateFunctionArguments(char*, LocalVars&, StringStream&);
+	friend char* readAndObfuscateLocaleVariables(char*, LocalVars&, LocalVars&, StringStream&);
 
 protected:
 	int removeComments(char *szLuaCode);
