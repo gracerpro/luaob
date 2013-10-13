@@ -73,7 +73,8 @@ const int WORK_BLOCK_SIZE = 1024;
 
 class LuaObfuscator {
 public:
-	LuaObfuscator(const StringList &luaFiles, const StringList &excludeGlobalFunctions);
+	LuaObfuscator(const StringList &luaFiles, const StringList &excludeGlobalFunctions,
+		std::string &sAddonDir);
 	~LuaObfuscator();
 
 	int obfuscate(const stObfuscatorSetting &settings);
@@ -107,8 +108,9 @@ protected:
 	int addFalseCode();
 
 private:
-	const StringList       m_luaFiles;
-	const StringList       m_excludeFunctions;
+	const std::string     &m_sAddonDir;
+	const StringList      &m_luaFiles;
+	const StringList      &m_excludeFunctions;
 	stObfuscatorStatistic  m_statistic;
 
 	static const char* generateObfuscatedFunctionName();

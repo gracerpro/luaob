@@ -92,16 +92,20 @@ bool isAbsoluteFilePath(const char *szFileName) {
 #endif
 }
 
+inline bool isSpaceChar(char c) {
+	return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+}
+
 char* strtrim(char* sz) {
 	if (!sz || !sz[0])
 		return NULL;
 
 	char *p = sz;
-	while (*p && (*p == ' ' || *p == '\t' || *p == '\n'))
+	while (*p && (isSpaceChar(*p)))
 		++p;
 
 	char *pEnd = &p[strlen(p) - 1];
-	while (pEnd >= p && (*pEnd == ' ' || *pEnd == '\t' || *p == '\n'))
+	while (pEnd >= p && isSpaceChar(*pEnd))
 		*(pEnd--) = 0;
 
 	return p;
@@ -119,7 +123,7 @@ bool isSingleStringStart(const char *p) {
 }
 
 bool isMultilineStringStart(const char *p) {
-	return (*p == '"' || *p == '\'');
+	return (*p == '[' && *(p + 1) == '[');
 }
 
 bool isSpace(const char c) {

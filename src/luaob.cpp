@@ -12,7 +12,7 @@
 void printHelp() {
 	print("=============== Lua obfuscator, Version 1.0\n");
 	print("===== Copyright (C) 2013, Gracer <gracerpro@gmail.com>\n");
-	print("[-t tocFileName]\n");
+	print("[-t FILE.toc]\n");
 	print("[-gef global_exclude_function_file_name]\n");
 	print("[-a FILE]\n");
 	print("[-dir DIRECTORY]\n");
@@ -35,17 +35,19 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 	int count = 0;
 
 	// sets default state
-	setting.bCreateOneFile = false;
-	setting.ObfuscateAddFalseCode = false;
-	setting.ObfuscateAddFalseComment = false;
-	setting.ObfuscateConstFloat = false;
-	setting.ObfuscateConstInt = false;
-	setting.ObfuscateConstString = false;
+	setting.bCreateOneFile              = false;
+	setting.ObfuscateAddFalseCode       = false;
+	setting.ObfuscateAddFalseComment    = false;
+	setting.ObfuscateConstFloat         = false;
+	setting.ObfuscateConstInt           = false;
+	setting.ObfuscateConstString        = false;
 	setting.ObfuscateGlobalFunctionName = false;
-	setting.ObfuscateLocalFunctionName = false;
-	setting.ObfuscateLocalVasAndParam = false;
-	setting.bCreateBakFile = true;
-	setting.linesBetweenFiles = 3;
+	setting.ObfuscateLocalFunctionName  = false;
+	setting.ObfuscateLocalVasAndParam   = false;
+	setting.bCreateBakFile              = true;
+	setting.linesBetweenFiles           = 3;
+
+//	addonDir = "e:/Software/Games/World of Warcraft/Interface/AddOns/chardumps/";
 
 	for (int i = 1; i < argc; ++i) {
 		const char *arg = argv[i];
@@ -118,6 +120,13 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 		}
 	}
 
+	if (!tocFileName.empty() && !isAbsoluteFilePath(tocFileName.c_str())) {
+		if (!addonDir.empty())
+			tocFileName = addonDir + tocFileName;
+		else
+			tocFileName = getWorkDir() + tocFileName;
+	}
+
 	return count;
 }
 
@@ -165,7 +174,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	try {
-		LuaObfuscator obfuscator(luaFiles, excludeGlobalFunctions);
+		LuaObfuscator obfuscator(luaFiles, excludeGlobalFunctions, addonDir);
 
 		print("create bak file:        %d\n", settings.bCreateBakFile);
 		print("create one file:        %d\n", settings.bCreateOneFile);
