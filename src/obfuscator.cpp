@@ -134,7 +134,7 @@ int LuaObfuscator::removeDumplicatedChars(char *szLuaCode) {
  */
 int LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
 	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#\n";
-
+	size_t spaceCount;
 	char *p     = szLuaCode;
 	char *pDest = szLuaCode;
 
@@ -145,25 +145,26 @@ int LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
 		++p;
 
 	// delete spaces near chars
+	spaceCount = 0;
 	while (*p) {
 		if (isStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
+			spaceCount = 0;
 			continue;
 		}
 
 		if (strchr(arrClearChar, *p)) {
-			if (*p == ')')
-				*p = *p;
-			char *pDelimer = p - 1;
-			while (isSpace(*pDelimer)) {
-				--pDelimer;
-				--pDest;
-			}
+			pDest -= spaceCount;
 			*pDest++ = *p++;
 			while (isSpace(*p))
 				++p;
+			spaceCount = 0;
 			continue;
 		}
+		if (isSpace(*p))
+			++spaceCount;
+		else
+			spaceCount = 0;
 		*pDest = *p;
 		++pDest;
 		++p;
@@ -1131,7 +1132,25 @@ bool parseNumber(char** pp, char *szNumber) {
  * into <stream>
  */
 void LuaObfuscator::obfuscateSingleString(StringStream &stream, const char *p, size_t size) {
+	const char *szEscapeSec = "abftvrn\"\'\\";
+
 	while (*p && size) {
+		bool bBackslash   = (*p == '\\' && *(p + 1) == '\\');
+		bool bEscapeChars = (*p == '\\' && strchr(szEscapeSec, *(p + 1)));
+
+		if (bBackslash || bEscapeChars) {
+			++p;
+			--size;
+		}
+		else if (*p == '\\' && size >= 4) {
+			bool bDigit = isdigit(*(p + 1)) && isdigit(*(p + 2)) && isdigit(*(p + 3));
+			if (bDigit) {
+				stream.write(p, 4);
+				p += 4;
+				size -= 4;
+				continue;
+			}
+		}
 		stream << '\\' << unsigned int(*p);
 		--size;
 		++p;
@@ -1167,7 +1186,7 @@ void LuaObfuscator::obfuscateFloat(StringStream &stream, const char *p, size_t s
  */
 int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 	StringStream &obfuscatedLuaCode,
-	bool bInt, bool bFloat, bool bString)
+	const bool bInt, const bool bFloat, const bool bString)
 {
 	int size = 0;
 	char szNumber[100];
@@ -1203,7 +1222,6 @@ int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 
 		++p;
 	}
-	stream << '\0';
 
 	return size;
 }
@@ -1312,7 +1330,7 @@ void SaveToFile(const char *data, char const *szFile, char *postfix)
 {
 	char buf[FILENAME_MAX];
 
-	GetFileDir(szFile, buf);
+	getFileDir(szFile, buf);
 	strcat(buf, "debug_ob_");
 	strcat(buf, postfix);
 	strcat(buf, ".lua");
@@ -1457,7 +1475,8 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 			fclose(fileOld);
 			return -1;
 		}
-		fwrite(pDataIn, 1, strlen(pDataIn), fileNew);
+		std::string &sTmp = strOut.str();
+		fwrite(sTmp.c_str(), 1, sTmp.length(), fileNew);
 
 		delete[] pDataInSource;
 

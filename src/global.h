@@ -4,22 +4,24 @@
 #include <windows.h>
 #include <stdint.h>
 
-
 #if defined _WIN32
 	#pragma warning(disable:4996)
 #endif
 
-char* GetFileDir(char const* szFile, char* szDir);
+const char* getExeDir();
+const char* getExeFileName();
+const char* getWorkDir();
+char*       getFileDir(char const* szFile, char* szDir);
 
-char const* GetExeDir();
-char const* GetExeName();
-bool isAbsoluteFilePath(const char *szFileName);
+bool        isAbsoluteFilePath(const char *szFileName);
+bool        fileExists(const char *szFileName);
+bool        isPathSep(const char c);
 
-bool fileExists(const char *szFileName);
+char*       strtrim(char* sz);
 
-char* strtrim(char* sz);
 
 void print(char const *format, ...);
+
 
 #ifdef _WIN32
 	#define SZ_EXE_FILE_NAME    "luaob.exe"

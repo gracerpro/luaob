@@ -100,7 +100,7 @@ protected:
 	void obfuscateSingleString(StringStream &stream, const char *p, size_t size);
 	//void obfuscateMultilineString(std::stringstream &stream, const char *p, size_t size);
 
-	int obfuscateConst(const char *szLuaCode, StringStream &obfuscatedLuaCode, bool bInt, bool bFloat, bool bString);
+	int obfuscateConst(const char *szLuaCode, StringStream &obfuscatedLuaCode, const bool bInt, const bool bFloat, const bool bStrin);
 	int obfuscateGlobalFunctionNames();
 	int obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode);
 	int addFalseComment();

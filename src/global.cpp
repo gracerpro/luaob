@@ -28,12 +28,12 @@ bool fileExists(const char *szFile) {
 #endif
 }
 
-char* GetFileDir(char const* szFile, char* szDir) {
+char* getFileDir(char const* szFile, char* szDir) {
 	char const *p = strrchr(szFile, '\\');
 	if (!p)
 		p = strrchr(szFile, '/');
 	if (!p) {
-		return strcpy(szDir, GetExeDir());
+		return strcpy(szDir, getWorkDir());
 	}
 	int size = p - szFile + 1;
 	strncpy(szDir, szFile, size);
@@ -42,7 +42,7 @@ char* GetFileDir(char const* szFile, char* szDir) {
 	return szDir;
 }
 
-char const* GetExeDir() {
+char const* getExeDir() {
 	static char buf[MAX_PATH];
 
 	GetModuleFileName(NULL, buf, MAX_PATH);
@@ -52,12 +52,30 @@ char const* GetExeDir() {
 	return buf;
 }
 
-char const* GetExeName() {
+const char* getWorkDir() {
+	static char buf[MAX_PATH];
+
+	buf[0] = 0;
+	if (size_t size = GetCurrentDirectory(MAX_PATH, buf)) {
+		if (!isPathSep(buf[size - 1])) {
+			buf[size] = PATH_SEPARATOR_CHAR;
+			buf[size + 1] = 0;
+		}
+	}
+
+	return buf;
+}
+
+char const* getExeFileName() {
 	static char buf[MAX_PATH];
 
 	GetModuleFileName(NULL, buf, MAX_PATH);
 
 	return buf;
+}
+
+bool isPathSep(const char c) {
+	return (c == '\\' || c == '/');
 }
 
 bool isAbsoluteFilePath(const char *szFileName) {

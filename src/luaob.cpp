@@ -102,8 +102,11 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 		else if (!strcmp(arg, "-dir")) {
 			if (++i < argc) {
 				addonDir = argv[i];
+				if (addonDir == ".") {
+					addonDir = getWorkDir();
+				}
 				char c = addonDir[addonDir.length() - 1];
-				if (!(c == '/' || c == '\\'))
+				if (!isPathSep(c))
 					addonDir += PATH_SEPARATOR_CHAR;
 				++count;
 			}
@@ -122,7 +125,7 @@ void validateFileNames(StringList &luaFiles, const char *szAddonDir = NULL) {
 	StringListIter iter = luaFiles.begin();
 
 	if (!szAddonDir || !szAddonDir[0])
-		szAddonDir = GetExeDir();
+		szAddonDir = getWorkDir();
 
 	while (iter != luaFiles.end()) {
 		std::string &str = *iter;
@@ -145,6 +148,9 @@ int main(int argc, char *argv[]) {
 
 	parseArguments(argc, argv, tocFileName, addonDir, globalExcludeFunctionFileName, luaFiles, settings);
 
+	print("Addon dir: %s\n", addonDir.c_str());
+	print("Work dir: %s\n", getWorkDir());
+
 	LuaObfuscator::readAddonGlobalExcludeFunctions(globalExcludeFunctionFileName.c_str(), excludeGlobalFunctions);
 
 	LuaObfuscator::readAddonTocFile(tocFileName.c_str(), luaFiles);
@@ -160,6 +166,14 @@ int main(int argc, char *argv[]) {
 
 	try {
 		LuaObfuscator obfuscator(luaFiles, excludeGlobalFunctions);
+
+		print("create bak file:        %d\n", settings.bCreateBakFile);
+		print("create one file:        %d\n", settings.bCreateOneFile);
+		print("obfuscate const int:    %d\n", settings.ObfuscateConstInt);
+		print("obfuscate const float:  %d\n", settings.ObfuscateConstFloat);
+		print("obfuscate const string: %d\n", settings.ObfuscateConstString);
+		print("obfuscate local vars:   %d\n", settings.ObfuscateLocalVasAndParam);
+		print("obfuscate global fucntions: %d\n", settings.ObfuscateGlobalFunctionName);
 
 		obfuscator.obfuscate(settings);
 	}
