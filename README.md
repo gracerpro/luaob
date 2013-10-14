@@ -6,7 +6,7 @@ Obfuscator for **valid** Lua code. Target code is WoW's Lua and may be read the 
 
 #Features
 * [always] Remove comments
-* [always] Remove duplicated chars (' ', '\n', '\t')
+* [always] Remove duplicated chars (' ', '\n', '\t', '0x160')
 * [always] Remove extra whitespace
 * [always] Remove extra new line symbols and replace him to semicolon
 * Replace global function names

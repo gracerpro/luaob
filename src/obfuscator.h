@@ -91,6 +91,8 @@ public:
 	friend char* readAndObfuscateLocaleVariables(char*, LocalVars&, LocalVars&, StringStream&);
 
 protected:
+	const char* getFileName(StringListConstIter iter);
+
 	int removeComments(char *szLuaCode);
 	int removeExtraWhitespace(char *szLuaCode);
 	int removeDumplicatedChars(char *szLuaCode); // ' ' and '\n' and '\t'
