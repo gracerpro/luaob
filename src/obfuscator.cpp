@@ -104,7 +104,7 @@ int LuaObfuscator::removeNewLines(char *szLuaCode) {
 		if (isMultilineStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
 		}
-		if (!strncmp(p, "if not CHD_TAXI[i]", sizeof("if not CHD_TAXI[i]") - 1))
+		if (!strncmp(p, "tostring(obj)", sizeof("tostring(obj)") - 1))
 			p = p;
 
 		if (isNewLine(*p)) {
@@ -200,8 +200,10 @@ int LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
 		++pDest;
 		++p;
 	}
-	while (isSpace(*pDest))
+/*	while (spaceCount && isSpace(*pDest)) { // TODO: die code?
 		--pDest;
+		--spaceCount;
+	}*/
 	*pDest = 0;
 
 	return pDest - p;
@@ -480,6 +482,9 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunction
 			continue;
 		}
 
+		if (!strncmp(p, "tostring", sizeof("tostring") - 1))
+			*p = *p;
+
 		char *pStart = p;
 		while (isAlphaFun(*p)) {
 			++p;
@@ -499,15 +504,19 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunction
 					}
 				}
 			}
-			stream.write(pStart, wordSize + 1);
+			stream.write(pStart, wordSize);
+			if (!p[0]) {
+				break;
+			}
 		}
 		stream << *p;
 
 		++p;
 	}
 
+
 	file = fopen(szFileName, "wt");
-	std::string& str = stream.str();
+	const std::string& str = stream.str();
 	size_t obfuscateSize = str.length();
 	if (file) {
 		fwrite(str.c_str(), 1, obfuscateSize, file);
@@ -529,8 +538,8 @@ int LuaObfuscator::obfuscateGlobalFunctionNames() {
 	// read global functions
 	StringListConstIter iter = m_luaFiles.begin();
 	while (iter != m_luaFiles.end()) {
-		std::string sFileName = *iter;
-		generateNewFileName(szFileNameNew, sFileName.c_str());
+		const char *szFileName = getFileName(iter);
+		generateNewFileName(szFileNameNew, szFileName);
 		readGlobalFunctions(szFileNameNew, globalFunctions);
 		++iter;
 	}
@@ -538,8 +547,8 @@ int LuaObfuscator::obfuscateGlobalFunctionNames() {
 	// replace global functions
 	iter = m_luaFiles.begin();
 	while (iter != m_luaFiles.end()) {
-		std::string sFileName = *iter;
-		generateNewFileName(szFileNameNew, sFileName.c_str());
+		const char *szFileName = getFileName(iter);
+		generateNewFileName(szFileNameNew, szFileName);
 		size += replaceGlobalFunctions(szFileNameNew, globalFunctions, m_excludeFunctions);
 		++iter;
 	}
@@ -1241,9 +1250,14 @@ int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 		else */
 		if (isSingleStringStart(p)) {
 			size_t size = skipStringAndMove(&p, NULL);
-			stream << *(p - size);
-			obfuscateSingleString(stream, p - size + 1, size - 2);
-			stream << *(p - 1);
+			if (bString) {
+				stream << *(p - size);
+				obfuscateSingleString(stream, p - size + 1, size - 2);
+				stream << *(p - 1);
+			}
+			else {
+				stream.write(p - size, size);
+			}
 			++m_statistic.stringCount;
 		}
 
@@ -1504,10 +1518,10 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 			fclose(fileOld);
 			return -1;
 		}
-		std::string &sTmp = strOut.str();
+		const std::string &sTmp = strOut.str();
 		const char *p = sTmp.c_str(); // TODO: correct code
 		size_t lenCstr = strlen(p);
-		size_t lenStream = sTmp.length(); // TODO: BAG! length difference!
+		size_t lenStream = sTmp.length(); // BAG: length difference!
 		fwrite(p, 1, lenCstr, fileNew);
 
 		delete[] pDataInSource;

@@ -24,8 +24,8 @@ void printHelp() {
 	print("[-opt-const_int]\n");
 	print("[-opt-const_string]\n");
 	print("[-opt-global_function]\n");
-	print("[-opt-local_function]");
-	print("[-opt-local_vars_args]");
+	print("[-opt-local_function]\n");
+	print("[-opt-local_vars_args]\n");
 }
 
 int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string &addonDir,
