@@ -1,4 +1,5 @@
 #include "obfuscator.h"
+#include "obfuscator.h"
 #include "global.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -806,6 +807,18 @@ size_t popLocalVariables(LocalVars &varsLocal, LocalVars &varsBlock) {
 	return count;
 }
 
+inline bool equalString(char *p, const char *szString, size_t size, const char *pBlockStart,
+	const char *pBlockEnd)
+{
+	bool res = !strncmp(p, szString, size);
+	if (p > pBlockStart)
+		res = !isalnum(*(p - 1));
+	if (p + size <= pBlockEnd)
+		res = !isalnum(*(p + size));
+
+	return res;
+}
+
 /*
  * params:
  *   pBlockBodyStart -- pointer to first byte of block's body
@@ -833,6 +846,9 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 	char *pWordBuffer = wordBuffer;
 	LocalVars varsBlock;
 
+	const char *pBlockStart = p;
+	const char *pBlockEnd   = p + strlen(p) - 1;
+
 	while (*p) {
 		if (isStringStart(p)) {
 			size_t size = skipStringAndMove(&p, NULL);
@@ -842,14 +858,14 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 
 		// skip local functions, functions in parameters
 		if (*p == 'd') {
-			if (!strncmp(p, "do", 2) && !isalnum(*(p - 1)) && !isalnum(*(p + 2))) {
+			if (equalString(p, "do", sizeof("do") - 1, pBlockStart, pBlockEnd)) {
 				stream << "do" << *(p + 2);
 				char *pBodyStart = p + 2 + 1;
 				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
 			}
 		}
 		else if (*p == 'r') { // TODO: repeat block
-			if (!strncmp(p, "repeat", 6) && !isalnum(*(p - 1)) && !isalnum(*(p + 6))) {
+			if (equalString(p, "repeat", sizeof("repeat") - 1, pBlockStart, pBlockEnd)) {
 				stream << "repeat" << *(p + 6);
 				char *pBodyStart = p + 6 + 1;
 				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
@@ -865,20 +881,20 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 		}
 		// skip the "while", "for" and "if" constructions
 		else if (*p == 't') {
-			if (!strncmp(p, "then", 4) && !isalnum(*(p-1)) && !isalnum(*(p + 4))) {
+			if (equalString(p, "then", sizeof("then") - 1, pBlockStart, pBlockEnd)) {
 				stream << "then" << *(p + 4);
 				char *pBodyStart = p + 4 + 1;
 				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
 			}
 		}
 		else if (*p == 'e') {
-			if (!strncmp(p, "end", 3) && !isalnum(*(p - 1)) && !isalnum(*(p + 3))) {
+			if (equalString(p, "end", sizeof("end") - 1, pBlockStart, pBlockEnd)) {
 				stream << "end";
 				// pop the equal variables...
 				popLocalVariables(varsLocal, varsBlock);
 				return p + 3;
 			}
-			if (!strncmp(p, "elseif", 3) && !isalnum(*(p - 1)) && !isalnum(*(p + 6))) {
+			if (equalString(p, "elseif", sizeof("elseif") - 1, pBlockStart, pBlockEnd)) {
 				stream << "elseif";
 				// pop the equal variables...
 				popLocalVariables(varsLocal, varsBlock);
@@ -886,7 +902,7 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			}
 		}
 		else if (*p == 'u') {
-			if (!strncmp(p, "until", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5))) {
+			if (equalString(p, "until", sizeof("until") - 1, pBlockStart, pBlockEnd)) {
 				stream << "until";
 				// pop the equal variables...
 				popLocalVariables(varsLocal, varsBlock);
@@ -894,7 +910,7 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			}
 		}
 		else if (*p == 'l') {
-			if (!strncmp(p, "local", 5) && !isalnum(*(p - 1)) && !isalnum(*(p + 5))) {
+			if (equalString(p, "local", sizeof("local") - 1, pBlockStart, pBlockEnd)) {
 				stream << "local" << *(p + 5);
 				p += 6;
 				// push(save) the equal variables...
@@ -935,8 +951,10 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			pWordBuffer = wordBuffer;
 		}
 
-		stream << *p;
-		++p;
+		if (*p) { // HACK:
+			stream << *p;
+			++p;
+		}
 	}
 
 	// pop the equal variables...
@@ -1260,7 +1278,7 @@ int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 			}
 			++m_statistic.stringCount;
 		}
-
+		// TODO: push \0
 		stream << *p;
 
 		++p;
