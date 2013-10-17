@@ -913,9 +913,19 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			if (equalString(p, "local", sizeof("local") - 1, pBlockStart, pBlockEnd)) {
 				stream << "local" << *(p + 5);
 				p += 6;
-				// push(save) the equal variables...
-				p = readAndObfuscateLocaleVariables(p, varsLocal, varsBlock, stream);
-				// DEBUG...
+				bool bFunction = !strncmp(p, "function", sizeof("function") - 1);
+				if (bFunction && !isAlphaFun(p[8])) {
+					stream << "function";
+					LocalVars vars;
+					p = readFunctionName(p, stream);
+					p = readAndObfuscateFunctionArguments(p, vars, stream);
+					p = obfuscateLocalVarsInBlock(p, vars, stream);
+				}
+				else {
+					// push(save) the equal variables...
+					p = readAndObfuscateLocaleVariables(p, varsLocal, varsBlock, stream);
+					// DEBUG...
+				}
 			}
 		}
 
