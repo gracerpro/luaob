@@ -5,12 +5,7 @@
 #include <string>
 #include <list>
 #include <set>
-
-struct stFakeFunction
-{
-	std::string name;
-	std::string fake_name;
-};
+#include "stack.h"
 
 typedef std::list<std::string>                 StringList;
 typedef std::list<std::string>::iterator       StringListIter;
@@ -86,9 +81,13 @@ public:
 	friend char* readAndSkipLocalVariables(char*, ObfuscatedItems&, char**);
 	friend char* obfuscateLocalVars(const char*, char const*, StringStream&);
 	friend char* readAndSkipLocalVariables(char*, StringStream&, ObfuscatedItems&);
-	friend char* obfuscateLocalVarsInBlock(char*, LocalVars&, StringStream&);
-	friend char* readAndObfuscateFunctionArguments(char*, LocalVars&, StringStream&);
-	friend char* readAndObfuscateLocaleVariables(char*, LocalVars&, LocalVars&, StringStream&);
+//	friend char* obfuscateLocalVarsInBlock(char*, LocalVars&, StringStream&);
+	friend char* readAndObfuscateFunctionArguments(char*, LocalVars&, LocalVarsStack&, StringStream&);
+	friend char* readAndObfuscateLocaleVariables(char*, LocalVars&, LocalVars&, LocalVarsStack&, StringStream&);
+
+	static const char* generateObfuscatedFunctionName();
+	static const char* generateObfuscatedLocalVariableName(); // and arguments
+	static size_t generateFalseComment(char *szAddComment);
 
 protected:
 	const char* getFileName(StringListConstIter iter);
@@ -114,10 +113,6 @@ private:
 	const StringList      &m_luaFiles;
 	const StringList      &m_excludeFunctions;
 	stObfuscatorStatistic  m_statistic;
-
-	static const char* generateObfuscatedFunctionName();
-	static const char* generateObfuscatedLocalVariableName(); // and arguments
-	static size_t generateFalseComment(char *szAddComment);
 
 	int readGlobalFunctions(const char *szFileName, FakeFunctions &Functions);
 };

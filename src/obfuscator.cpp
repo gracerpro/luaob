@@ -402,7 +402,7 @@ int LuaObfuscator::readGlobalFunctions(const char *szFileName, FakeFunctions &gl
 				char szFun[200];
 				int trancSpaces = getGlobalFunctionName(&p, szFun);
 				if (trancSpaces && szFun[0]) {
-					stFakeFunction fun;
+					stObfuscatedName fun;
 					fun.name = szFun;
 					fun.fake_name = LuaObfuscator::generateObfuscatedFunctionName();
 					globalFunctions[fun.name] = fun.fake_name;
@@ -668,8 +668,8 @@ char* readAndSkipLocalVariables(char *p, StringStream &stream, ObfuscatedItems &
  * return:
  *   first byte of function's body
  */
-char* readAndObfuscateFunctionArguments(char *pArgumentStart, LocalVars &vars,
-	StringStream &stream)
+char* readAndObfuscateFunctionArguments(StringStream &stream, char *pArgumentStart,
+	LocalVarsStack &localVarsStack)
 {
 	char *p = pArgumentStart;
 
@@ -690,7 +690,7 @@ char* readAndObfuscateFunctionArguments(char *pArgumentStart, LocalVars &vars,
 			std::string str(pStart, size);
 			if (str != "...") {
 				const char *szObVarName = LuaObfuscator::generateObfuscatedLocalVariableName();
-				vars[str] = szObVarName;
+				localVarsStack.push(str.c_str(), szObVarName);
 				stream << szObVarName << *p; // *p == ',' or ')'
 			}
 			else {
@@ -710,7 +710,7 @@ char* readAndObfuscateFunctionArguments(char *pArgumentStart, LocalVars &vars,
  * "... function"
  *              |_ here
  */
-char* readFunctionName(char *p, StringStream &stream)
+char* readFunctionName(StringStream &stream, char *p)
 {
 	char *pFunNameStart = p + 8;
 
@@ -745,10 +745,14 @@ char* readFunctionName(char *p, StringStream &stream)
  * and obfuscate them names
  * and push equal variables
  */
-char* readAndObfuscateLocaleVariables(char *p, LocalVars &varsLocal, LocalVars &varsBlock,
-	StringStream &stream)
+char* readAndObfuscateLocalVariables(StringStream &stream, char *p,
+	LocalVarsStack &varsBlockStack, LocalVarsStack &localVarsModule, int &level)
 {
-	char *pEqual = strchr(p, '=');
+	char *pEqual = p;
+	while (*pEqual && !(*pEqual == '=' || *pEqual == ';' || *pEqual == '\n')) {
+		++pEqual;
+	}
+/*	char *pEqual = strchr(p, '=');
 	char cEqual = '=';
 	if (!pEqual) {
 		pEqual = strchr(p, ';');
@@ -762,6 +766,8 @@ char* readAndObfuscateLocaleVariables(char *p, LocalVars &varsLocal, LocalVars &
 		print("Parse error near locale variables\n");
 		return p;
 	}
+*/
+	LocalVarsStack *pLocalVarsStack = (level > 0) ? &varsBlockStack : &localVarsModule;
 
 	while (p < pEqual) {
 		char *pStart = p;
@@ -769,19 +775,18 @@ char* readAndObfuscateLocaleVariables(char *p, LocalVars &varsLocal, LocalVars &
 			++p;
 		size_t len = p - pStart;
 		if (len) {
-			std::string str(pStart, len);
-			StringMapConstIter item = varsLocal.find(str);
-			if (item != varsLocal.end()) {
-				// PUSH
-				char const *pObName = LuaObfuscator::generateObfuscatedLocalVariableName();
-				varsLocal[str] = pObName;
-				stream << item->second.c_str() << *p;
+			stObfuscatedName obfName;
+
+			obfName.name.assign(pStart, len);
+			// ѕровер€ем есть ли локальные переменные с таким же именем в блоке
+			bool bFind = pLocalVarsStack->find(obfName);
+			if (bFind) { // ≈сли есть то пишем кодированное им€ переменной
+				stream << obfName.fake_name << *p;
 			}
-			else {
-				char const *pObName = LuaObfuscator::generateObfuscatedLocalVariableName();
-				varsBlock[str] = pObName;
-				//varsLocal[str] = pObName;
-				stream << pObName << *p;
+			else { // ≈сли нет то добавл€ем пару им€=код_им€ в стек
+				obfName.fake_name = LuaObfuscator::generateObfuscatedLocalVariableName();
+				pLocalVarsStack->push(obfName);
+				stream << obfName.fake_name << *p;
 			}
 		}
 		++p;
@@ -810,13 +815,31 @@ size_t popLocalVariables(LocalVars &varsLocal, LocalVars &varsBlock) {
 inline bool equalString(char *p, const char *szString, size_t size, const char *pBlockStart,
 	const char *pBlockEnd)
 {
-	bool res = !strncmp(p, szString, size);
+	bool res = (0 == strncmp(p, szString, size));
+	if (!res)
+		return false;
+
 	if (p > pBlockStart)
-		res = !isalnum(*(p - 1));
+		res &= !isalnum(*(p - 1));
 	if (p + size <= pBlockEnd)
-		res = !isalnum(*(p + size));
+		res &= !isalnum(*(p + size));
 
 	return res;
+}
+
+void PushElements(LocalVarsStack &stack, LocalVarsStack addStack) {
+	while (!addStack.empty()) {
+		stObfuscatedName &fun = addStack.top();
+		stack.push(fun);
+		addStack.pop();
+	}
+}
+
+void PopElements(LocalVarsStack &stack, size_t count) {
+/*	while (count) {
+		stack.pop();
+		--count;
+	}*/
 }
 
 /*
@@ -835,16 +858,21 @@ inline bool equalString(char *p, const char *szString, size_t size, const char *
  *
  * return:
  *   first byte after block's body
+ * 
+ * varsStackBlock  -- local variables in block
+ * varsStackParent -- local variables in parent block
+ * localModuleVars -- local variables in module
+ * level           -- block level, for module == 0
  */
-char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
-	StringStream &stream)
+char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
+	LocalVarsStack& varsStackBlock, LocalVarsStack& varsStackParent,
+	LocalVarsStack& localModuleVars, int &level)
 {
-	char *p = const_cast<char*>(pBlockBodyStart);
-//	int blockLevel = 0; // current block
-	size_t wordLen = 0;
+	char *p = pBlockBodyStart;
 	char wordBuffer[300];
 	char *pWordBuffer = wordBuffer;
-	LocalVars varsBlock;
+	size_t wordLen = 0;
+	size_t varBlockCount = varsStackBlock.count(); // Count of variables in the block
 
 	const char *pBlockStart = p;
 	const char *pBlockEnd   = p + strlen(p) - 1;
@@ -856,48 +884,76 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			continue;
 		}
 
-		// skip local functions, functions in parameters
 		if (*p == 'd') {
 			if (equalString(p, "do", sizeof("do") - 1, pBlockStart, pBlockEnd)) {
+				LocalVarsStack varsStackBlockNew;
+
 				stream << "do" << *(p + 2);
 				char *pBodyStart = p + 2 + 1;
-				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+				// PUSH block local variables to global variables
+				varsStackParent += varsStackBlock;
+				++level;
+				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlockNew, varsStackParent,
+					localModuleVars, level);
+				--level;
+				// POP block local variables from global variables
+				varsStackParent.pops(varBlockCount);
 			}
 		}
 		else if (*p == 'r') { // TODO: repeat block
 			if (equalString(p, "repeat", sizeof("repeat") - 1, pBlockStart, pBlockEnd)) {
 				stream << "repeat" << *(p + 6);
-				char *pBodyStart = p + 6 + 1;
-				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+			/*	char *pBodyStart = p + 6 + 1;
+				PushElements(varsBlockStackGlobal, varsBlockStack);
+				p = obfuscateLocalVarsInBlock(pBodyStart, varsBlockStackGlobal, stream);
+				PopElements(varsBlockStackGlobal, varBlockCount);*/
 			}
 		}
 		else if (*p == 'f') {
+			// if found global function
 			if (!strncmp(p, "function", 8) && !isalnum(*(p + 8))) {
-				LocalVars vars;
-				p = readFunctionName(p, stream);
-				p = readAndObfuscateFunctionArguments(p, vars, stream);
-				p = obfuscateLocalVarsInBlock(p, vars, stream);
+				LocalVarsStack localVarsStackBlock;
+				LocalVarsStack localVarsStackParent;
+
+				p = readFunctionName(stream, p);
+				p = readAndObfuscateFunctionArguments(stream, p, localVarsStackBlock);
+				++level;
+				p = obfuscateLocalVarsInBlock(stream, p, localVarsStackBlock, localVarsStackParent,
+					localModuleVars, level);
+				--level;
 			}
 		}
 		// skip the "while", "for" and "if" constructions
 		else if (*p == 't') {
 			if (equalString(p, "then", sizeof("then") - 1, pBlockStart, pBlockEnd)) {
+				/*stream << "then" << *(p + 4);
+				char *pBodyStart = p + 4 + 1;
+				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackGlobal, localModuleVars);
+				*/
+				LocalVarsStack varsStackBlockNew;
+
 				stream << "then" << *(p + 4);
 				char *pBodyStart = p + 4 + 1;
-				p = obfuscateLocalVarsInBlock(pBodyStart, varsLocal, stream);
+				varsStackParent += varsStackBlock;
+				++level;
+				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlockNew, varsStackParent,
+					localModuleVars, level);
+				--level;
+				// POP block local variables from global variables
+				varsStackParent.pops(varBlockCount);
 			}
 		}
 		else if (*p == 'e') {
 			if (equalString(p, "end", sizeof("end") - 1, pBlockStart, pBlockEnd)) {
 				stream << "end";
 				// pop the equal variables...
-				popLocalVariables(varsLocal, varsBlock);
+			//	PopElements(varsBlockStackGlobal, varBlockCount);
 				return p + 3;
 			}
 			if (equalString(p, "elseif", sizeof("elseif") - 1, pBlockStart, pBlockEnd)) {
 				stream << "elseif";
 				// pop the equal variables...
-				popLocalVariables(varsLocal, varsBlock);
+			//	PopElements(varsBlockStackGlobal, varBlockCount);
 				return p + 6;
 			}
 		}
@@ -905,25 +961,32 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			if (equalString(p, "until", sizeof("until") - 1, pBlockStart, pBlockEnd)) {
 				stream << "until";
 				// pop the equal variables...
-				popLocalVariables(varsLocal, varsBlock);
+			//	PopElements(varsBlockStackGlobal, varBlockCount);
 				return p + 5;
 			}
 		}
 		else if (*p == 'l') {
 			if (equalString(p, "local", sizeof("local") - 1, pBlockStart, pBlockEnd)) {
-				stream << "local" << *(p + 5);
+				stream << "local ";
 				p += 6;
 				bool bFunction = !strncmp(p, "function", sizeof("function") - 1);
 				if (bFunction && !isAlphaFun(p[8])) {
+					LocalVarsStack localVarsStackBlock;
+					LocalVarsStack localVarsStackParent;
+
 					stream << "function";
-					LocalVars vars;
-					p = readFunctionName(p, stream);
-					p = readAndObfuscateFunctionArguments(p, vars, stream);
-					p = obfuscateLocalVarsInBlock(p, vars, stream);
+					p = readFunctionName(stream, p);
+					p = readAndObfuscateFunctionArguments(stream, p, localVarsStackBlock);
+					++level;
+					p = obfuscateLocalVarsInBlock(stream, p, localVarsStackBlock, localVarsStackParent,
+						localModuleVars, level);
+					--level;
 				}
 				else {
 					// push(save) the equal variables...
-					p = readAndObfuscateLocaleVariables(p, varsLocal, varsBlock, stream);
+					size_t tmpCount = varsStackBlock.count();
+					p = readAndObfuscateLocalVariables(stream, p, varsStackBlock, localModuleVars, level);
+					varBlockCount += varsStackBlock.count() - tmpCount;
 					// DEBUG...
 				}
 			}
@@ -941,20 +1004,19 @@ char* obfuscateLocalVarsInBlock(char *pBlockBodyStart, LocalVars &varsLocal,
 			char *pBefore = p - wordLen - 1;
 			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.')) {
 				std::string str(wordBuffer);
-				StringMapConstIter iter = varsBlock.find(str);
-				if (iter != varsBlock.end()) {
-					size_t len = iter->second.length();
-					stream.write(iter->second.c_str(), len);
+				stObfuscatedName var;
+				var.name = str;
+				bool bFind = false;
+				if (level)
+					bFind = varsStackBlock.find(var);
+				if (!bFind)
+					bFind = localModuleVars.find(var);
+
+				if (bFind) {
+					stream << var.fake_name;
 				}
 				else {
-					iter = varsLocal.find(str);
-					if (iter != varsLocal.end()) {
-						size_t len = iter->second.length();
-						stream.write(iter->second.c_str(), len);
-					}
-					else {
-						stream << wordBuffer;
-					}
+					stream << wordBuffer;
 				}
 			}
 			wordLen = 0;
@@ -1098,11 +1160,15 @@ char* obfuscateLocalVars(const char *pParamStart, char const *pBodyEnd, StringSt
  *   local abrakadabra = 123
  */
 int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode) {
-	LocalVars vars;
+	LocalVarsStack localVarsStackParent;
+	LocalVarsStack localVarsStackBlock;
+	LocalVarsStack localModuleVars;
+	int level = 0;
 	char *p = const_cast<char*>(szLuaCode);
 
 	obfuscatedLuaCode.str("");
-	obfuscateLocalVarsInBlock(p, vars, obfuscatedLuaCode);
+	obfuscateLocalVarsInBlock(obfuscatedLuaCode, p, localVarsStackBlock, localVarsStackParent,
+		localModuleVars, level);
 
 	return obfuscatedLuaCode.str().size() - strlen(szLuaCode);
 
