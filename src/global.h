@@ -44,6 +44,7 @@ void print(char const *format, ...);
 bool isSpace(const char c);
 bool isNewLine(const char c);
 bool isAlphaFun(const char c);
+bool isVarChar(const char c);
 bool isStringStart(const char *p);
 bool isSingleStringStart(const char *p);
 bool isMultilineStringStart(const char *p);

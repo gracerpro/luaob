@@ -25,6 +25,7 @@ void LocalVarsStack::push(const stObfuscatedName& obfuscatedName) {
 		for (size_t i = 0; i < m_count; ++i)
 			pNewData[i] = m_data[i];
 		delete[] m_data;
+		m_data = pNewData;
 	}
 
 	m_data[m_count] = obfuscatedName;
@@ -72,6 +73,15 @@ LocalVarsStack& operator+= (LocalVarsStack& stackDest, const LocalVarsStack& sta
 }
 
 bool LocalVarsStack::find(const std::string& name) const {
+	for (size_t i = 0; i < m_count; ++i) {
+		if (m_data[i].name == name)
+			return true;
+	}
+
+	return false;
+}
+
+bool LocalVarsStack::find(const char *name) const {
 	for (size_t i = 0; i < m_count; ++i) {
 		if (m_data[i].name == name)
 			return true;

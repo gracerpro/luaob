@@ -79,11 +79,13 @@
     <ClCompile Include="..\..\src\global.cpp" />
     <ClCompile Include="..\..\src\luaob.cpp" />
     <ClCompile Include="..\..\src\obfuscator.cpp" />
+    <ClCompile Include="..\..\src\stack.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\global.h" />
     <ClInclude Include="..\..\src\obfuscator.h" />
     <ClInclude Include="..\..\src\resource.h" />
+    <ClInclude Include="..\..\src\stack.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\luaob.rc" />

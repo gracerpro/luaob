@@ -26,6 +26,7 @@ public:
 	
 	bool find(stObfuscatedName& obfuscatedName) const;
 	bool find(const std::string& name) const;
+	bool find(const char *name) const;
 	
 	size_t count() const;
 	bool empty() const;

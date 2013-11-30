@@ -79,7 +79,7 @@ public:
 		StringList &FunctionsExclude);
 
 	friend char* readAndSkipLocalVariables(char*, ObfuscatedItems&, char**);
-	friend char* obfuscateLocalVars(const char*, char const*, StringStream&);
+	friend char* obfuscateLocalVars(const char*, const char*, StringStream&);
 	friend char* readAndSkipLocalVariables(char*, StringStream&, ObfuscatedItems&);
 //	friend char* obfuscateLocalVarsInBlock(char*, LocalVars&, StringStream&);
 	friend char* readAndObfuscateFunctionArguments(char*, LocalVars&, LocalVarsStack&, StringStream&);

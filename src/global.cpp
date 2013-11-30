@@ -138,6 +138,10 @@ bool isAlphaFun(const char c) {
 	return (isalnum(c) || c == '_');
 }
 
+bool isVarChar(const char c) {
+	return (isalnum(c) || c == '_');
+}
+
 /*
  * Skip the string in Lua's code and move a pointer
  * *pData -- pointer to "string"
