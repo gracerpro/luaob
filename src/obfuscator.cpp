@@ -105,8 +105,6 @@ int LuaObfuscator::removeNewLines(char *szLuaCode) {
 		if (isMultilineStringStart(p)) {
 			skipStringAndMove(&p, &pDest);
 		}
-		if (!strncmp(p, "tostring(obj)", sizeof("tostring(obj)") - 1))
-			p = p;
 
 		if (isNewLine(*p)) {
 			char cPrev = *(p - 1);
@@ -673,11 +671,16 @@ char* readAndObfuscateFunctionArguments(StringStream &stream, char *pArgumentSta
 {
 	char *p = pArgumentStart;
 
+	if (*p == ')') {
+		stream << ')';
+		return p + 1;
+	}
 	const char *pRightSk = strchr(p, ')');
 	if (!pRightSk) {
 		print("Parsing error. ')' not found near arguments\n");
 		return p;
 	}
+
 
 	// Find agruments...
 	do {
@@ -763,8 +766,7 @@ size_t obfuscateLocalVarsInExpression(StringStream &stream, char *pExpStart, con
  *	 pointer to firs char or for's body
  */
 char* readAndObfuscateForLocalVariables(StringStream &stream, char *pLocalVariablesStart,
-	LocalVarsStack &localVarsInForStack, LocalVarsStack &localVarsInBlock,
-	LocalVarsStack &localVarsInModule)
+	LocalVarsStack &localVarsInBlock, LocalVarsStack &localVarsInModule)
 {
 	char *p = pLocalVariablesStart;
 
@@ -784,7 +786,7 @@ char* readAndObfuscateForLocalVariables(StringStream &stream, char *pLocalVariab
 			strncpy(word, pWordStart, size);
 			word[size] = 0;
 			const char *szObVarName = LuaObfuscator::generateObfuscatedLocalVariableName();
-			localVarsInForStack.push(word, szObVarName);
+			localVarsInBlock.push(word, szObVarName);
 			stream << szObVarName << *p;
 		}
 		if (isSpace(*p) || (*p == '=')) {
@@ -820,18 +822,17 @@ char* readAndObfuscateForLocalVariables(StringStream &stream, char *pLocalVariab
  */
 char* readFunctionName(StringStream &stream, char *p)
 {
-	char *pFunNameStart = p + 8;
-
-	stream << "function";
-	if (isSpace(*pFunNameStart)) {
-		stream << *pFunNameStart;
-		++pFunNameStart;
-	}
-	p = pFunNameStart;
-	// find function name
-	while (*p && isAlphaFun(*p))
+	if (isSpace(*p)) {
+		stream << *p;
 		++p;
-	if (*p != '(') {
+	}
+
+	char *pFunNameStart = p;
+
+	while (*p && p[0] != '(') {
+		++p;
+	}
+	if (!p[0]) {
 		printf("parse error, '(' not found near function name\n");
 		return p;
 	}
@@ -961,7 +962,7 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
 		}
 
 		// "while loop" too
-		if (*p == 'd') { 
+		if (*p == 'd') {
 			if (equalString(p, "do", sizeof("do") - 1, pBlockStart, pBlockEnd)) {
 				stream << "do" << *(p + 2);
 				char *pBodyStart = p + 2 + 1;
@@ -980,35 +981,39 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
 		}
 		else if (*p == 'f') {
 			// if found global function
-			if (!strncmp(p, "function", 8) && !isalnum(*(p + 8))) {
-				LocalVarsStack localVarsStackBlock;
+			if (!strncmp(p, "function", 8) && !isAlphaFun(*(p + 8))) {
+			//	LocalVarsStack localVarsStackBlock;
 
+				stream << "function";
+				p += 8;
 				p = readFunctionName(stream, p);
-				p = readAndObfuscateFunctionArguments(stream, p, localVarsStackBlock);
+				size_t argCount = varsStackBlock.count();
+				p = readAndObfuscateFunctionArguments(stream, p, varsStackBlock);
+				argCount = varsStackBlock.count() - argCount;
 				++level;
-				p = obfuscateLocalVarsInBlock(stream, p, localVarsStackBlock, localModuleVars, level);
+				p = obfuscateLocalVarsInBlock(stream, p, varsStackBlock, localModuleVars, level);
+				varsStackBlock.pops(argCount);
 				--level;
 			}
 			if (equalString(p, "for", sizeof("for") - 1, pBlockStart, pBlockEnd)) {
-				LocalVarsStack varsStackBlockNew;
-
 				stream << "for ";
 				char *pInitStart = p + 3 + 1;
 
-				p = readAndObfuscateForLocalVariables(stream, pInitStart, varsStackBlockNew, varsStackBlock, localModuleVars);
+				size_t varInitCount = varsStackBlock.count();
+				p = readAndObfuscateForLocalVariables(stream, pInitStart, varsStackBlock, localModuleVars);
+				varInitCount = varsStackBlock.count() - varInitCount;
 				++level;
-				p = obfuscateLocalVarsInBlock(stream, p, varsStackBlockNew, localModuleVars, level);
+				p = obfuscateLocalVarsInBlock(stream, p, varsStackBlock, localModuleVars, level);
+				varsStackBlock.pops(varInitCount);
 				--level;
 			}
 		}
 		else if (*p == 't') {
 			if (equalString(p, "then", sizeof("then") - 1, pBlockStart, pBlockEnd)) {
-				LocalVarsStack varsStackBlockNew;
-
 				stream << "then" << *(p + 4);
 				char *pBodyStart = p + 4 + 1;
 				++level;
-				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlockNew, localModuleVars, level);
+				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlock, localModuleVars, level);
 				--level;
 			}
 		}
@@ -1026,11 +1031,11 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
 				return p + 6;
 			}
 			if (equalString(p, "else", sizeof("else") - 1, pBlockStart, pBlockEnd)) {
-				LocalVarsStack varsStackBlockNew;
+			//	LocalVarsStack varsStackBlockNew;
 
 				stream << "else" << *(p + 4);
 				char *pBodyStart = p + 4 + 1;
-				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlockNew, localModuleVars, level);
+				p = obfuscateLocalVarsInBlock(stream, pBodyStart, varsStackBlock, localModuleVars, level);
 				--level;
 			}
 		}
@@ -1044,11 +1049,12 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
 			if (equalString(p, "local", sizeof("local") - 1, pBlockStart, pBlockEnd)) {
 				stream << "local ";
 				p += 6;
-				bool bFunction = !strncmp(p, "function", sizeof("function") - 1);
+				bool bFunction = !strncmp(p, "function", sizeof("function") - 1) && !isAlphaFun(p[8]);
 				if (bFunction && !isAlphaFun(p[8])) {
 					LocalVarsStack localVarsStackBlock;
 
 					stream << "function";
+					p += 8;
 					p = readFunctionName(stream, p);
 					p = readAndObfuscateFunctionArguments(stream, p, localVarsStackBlock);
 					++level;
@@ -1075,7 +1081,15 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
 		else {
 			*pWordBuffer = 0;
 			char *pBefore = p - wordLen - 1;
-			if (wordLen > 0 && (*pBefore != '.' || *(pBefore - 1) == '.')) {
+			if (wordLen > 0) {
+				// skip table's fields
+				if (*pBefore == '.' &&  *(pBefore - 1) != '.') {
+					stream << wordBuffer << *p;
+					++p;
+					pWordBuffer = wordBuffer;
+					wordLen = 0;
+					continue;
+				}
 				std::string str(wordBuffer);
 				stObfuscatedName var;
 				var.name = str;
