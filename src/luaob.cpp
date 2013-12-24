@@ -34,7 +34,7 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 {
 	int count = 0;
 
-	// sets default state
+	// default
 	setting.bCreateOneFile              = false;
 	setting.ObfuscateAddFalseCode       = false;
 	setting.ObfuscateAddFalseComment    = false;
@@ -45,7 +45,7 @@ int parseArguments(int argc, char *argv[], std::string &tocFileName, std::string
 	setting.ObfuscateLocalFunctionName  = false;
 	setting.ObfuscateLocalVasAndParam   = false;
 	setting.bCreateBakFile              = true;
-	setting.linesBetweenFiles           = 3;
+	setting.linesBetweenFiles           = 0;
 
 //	addonDir = "e:/Software/Games/World of Warcraft/Interface/AddOns/chardumps/";
 
@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
 	LuaObfuscator::readAddonTocFile(tocFileName.c_str(), luaFiles);
 
 	// add absolute path name, if need
-	validateFileNames(luaFiles, addonDir.c_str());
+	//validateFileNames(luaFiles, addonDir.c_str());
 
 	if (luaFiles.empty()) {
 		printHelp();

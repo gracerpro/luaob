@@ -38,7 +38,7 @@ struct stObfuscatorSetting {
 	bool ObfuscateAddFalseCode;
 	bool bCreateBakFile;
 	bool bCreateOneFile;
-	int  linesBetweenFiles;
+	unsigned int linesBetweenFiles;
 };
 
 struct stObfuscatorStatistic {
@@ -79,8 +79,8 @@ public:
 		StringList &FunctionsExclude);
 
 	friend char* readAndSkipLocalVariables(char*, ObfuscatedItems&, char**);
-	friend char* obfuscateLocalVars(const char*, const char*, StringStream&);
 	friend char* readAndSkipLocalVariables(char*, StringStream&, ObfuscatedItems&);
+	friend char* obfuscateLocalVars(const char*, const char*, StringStream&);
 //	friend char* obfuscateLocalVarsInBlock(char*, LocalVars&, StringStream&);
 	friend char* readAndObfuscateFunctionArguments(char*, LocalVars&, LocalVarsStack&, StringStream&);
 	friend char* readAndObfuscateLocaleVariables(char*, LocalVars&, LocalVars&, LocalVarsStack&, StringStream&);

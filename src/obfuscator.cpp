@@ -61,6 +61,7 @@ int LuaObfuscator::removeComments(char *szLuaCode) {
 				++p;
 			++m_statistic.singleCommentCount;
 		}
+
 		*pDest = *p;
 		++p;
 		++pDest;
@@ -1496,7 +1497,6 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		pDataIn[realSize] = 0;
 		pDataIn[realSize + 1] = 0;
 
-
 		char szFileBakup[FILENAME_MAX];
 		if (settings.bCreateBakFile) {
 			strcpy(szFileBakup, szFileName);
@@ -1616,6 +1616,43 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		addCommentSize = addFalseComment();
 		print("Total size: %d\n", addCommentSize);
 	}
+
+	char szAddonFilename[MAX_PATH];
+	strcpy(szAddonFilename, m_sAddonDir.c_str());
+	strcat(szAddonFilename, "addon.lua");
+	FILE *addonFile = fopen(szAddonFilename, "wb");
+	if (!addonFile) {
+		printf("Couldn't create addon.lua file\n");
+		return 1;
+	}
+	iter = m_luaFiles.begin();
+	while (iter != m_luaFiles.end()) {
+		const char *szFileName = getFileName(iter);
+		generateNewFileName(szFileNameNew, szFileName);
+		fileNew = fopen(szFileNameNew, "rb");
+		char buf[4096];
+		char cLast = 0;
+		while (size_t size = fread(buf, 1, 4096, fileNew)) {
+			fwrite(buf, size, 1, addonFile);
+			cLast = buf[size - 1];
+		}
+		fclose(fileNew);
+
+		// add ; to divide files
+		if (!settings.linesBetweenFiles) {
+			if (cLast != ';') {
+				fwrite(";", 1, 1, addonFile);
+			}
+		}
+		else {
+			for (size_t i = 0; i < settings.linesBetweenFiles; ++i) {
+				fwrite("\n", 1, 1, addonFile);
+			}
+		}
+
+		++iter;
+	}
+	fclose(addonFile);
 
 	return 0;
 }
