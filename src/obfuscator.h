@@ -74,7 +74,7 @@ public:
 
 	int obfuscate(const stObfuscatorSetting &settings);
 
-	static int readAddonTocFile(char const *szTocFileName, StringList &luaFiles);
+	static size_t readAddonTocFile(char const *szTocFileName, StringList &luaFiles);
 	static int readAddonGlobalExcludeFunctions(const char *szGlobalExcludeFunctionFileName,
 		StringList &FunctionsExclude);
 
@@ -92,10 +92,10 @@ public:
 protected:
 	const char* getFileName(StringListConstIter iter);
 
-	int removeComments(char *szLuaCode);
-	int removeExtraWhitespace(char *szLuaCode);
-	int removeDumplicatedChars(char *szLuaCode); // ' ' and '\n' and '\t'
-	int removeNewLines(char *szLuaCode);
+	ptrdiff_t removeComments(char *szLuaCode);
+	ptrdiff_t removeExtraWhitespace(char *szLuaCode);
+	ptrdiff_t removeDumplicatedChars(char *szLuaCode); // ' ' and '\n' and '\t'
+	ptrdiff_t removeNewLines(char *szLuaCode);
 
 	void obfuscateInt(StringStream &stream, const char *p, size_t size);
 	void obfuscateFloat(StringStream &stream, const char *p, size_t size);
@@ -103,15 +103,15 @@ protected:
 	//void obfuscateMultilineString(std::stringstream &stream, const char *p, size_t size);
 
 	int obfuscateConst(const char *szLuaCode, StringStream &obfuscatedLuaCode, const bool bInt, const bool bFloat, const bool bStrin);
-	int obfuscateGlobalFunctionNames();
-	int obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode);
+	ptrdiff_t obfuscateGlobalFunctionNames();
+	ptrdiff_t obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode);
 	int addFalseComment();
 	int addFalseCode();
 
 private:
-	const std::string     &m_sAddonDir;
 	const StringList      &m_luaFiles;
 	const StringList      &m_excludeFunctions;
+	const std::string     &m_sAddonDir;
 	stObfuscatorStatistic  m_statistic;
 
 	int readGlobalFunctions(const char *szFileName, FakeFunctions &Functions);

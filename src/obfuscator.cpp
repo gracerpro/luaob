@@ -37,7 +37,7 @@ const char* LuaObfuscator::getFileName(StringListConstIter iter) {
 	return strcat(file, iter->c_str());
 }
 
-int LuaObfuscator::removeComments(char *szLuaCode) {
+ptrdiff_t LuaObfuscator::removeComments(char *szLuaCode) {
 	char *p     = szLuaCode;
 	char *pDest = szLuaCode;
 
@@ -75,7 +75,7 @@ int LuaObfuscator::removeComments(char *szLuaCode) {
  * Delete the new line chars.
  * TODO: each chunk must be ended ';'
  */
-int LuaObfuscator::removeNewLines(char *szLuaCode) {
+ptrdiff_t LuaObfuscator::removeNewLines(char *szLuaCode) {
 	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#\n";
 	char *p = szLuaCode;
 
@@ -138,7 +138,7 @@ int LuaObfuscator::removeNewLines(char *szLuaCode) {
 /*
  * delete dublicated spaces
  */
-int LuaObfuscator::removeDumplicatedChars(char *szLuaCode) {
+ptrdiff_t LuaObfuscator::removeDumplicatedChars(char *szLuaCode) {
 	char *pDest = szLuaCode;
 	char *p     = szLuaCode;
 
@@ -147,8 +147,8 @@ int LuaObfuscator::removeDumplicatedChars(char *szLuaCode) {
 			skipStringAndMove(&p, &pDest);
 			continue;
 		}
-		if (!(isSpace(*p) && isSpace(*(p - 1)) ||
-			isNewLine(*p) && isNewLine(*(p - 1))))
+		if (!((isSpace(*p) && isSpace(*(p - 1))) ||
+			(isNewLine(*p) && isNewLine(*(p - 1)))))
 		{
 			*pDest = *p;
 			++pDest;
@@ -163,7 +163,7 @@ int LuaObfuscator::removeDumplicatedChars(char *szLuaCode) {
 /*
  * Delete the spaces near some characters
  */
-int LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
+ptrdiff_t LuaObfuscator::removeExtraWhitespace(char *szLuaCode) {
 	char const *arrClearChar = "{}()[].,;+-*/^%<>~=#\n";
 	size_t spaceCount;
 	char *p     = szLuaCode;
@@ -220,11 +220,11 @@ char* generateNewFileName(char *szFileNameNew, char const *szFileName) {
 	return szFileNameNew;
 }
 
-int LuaObfuscator::readAddonTocFile(char const *szTocFileName, StringList &luaFiles) {
+size_t LuaObfuscator::readAddonTocFile(char const *szTocFileName, StringList &luaFiles) {
 	char buf[300];
 
 	if (!szTocFileName || !szTocFileName[0])
-		return -1;
+		return 0;
 
 	FILE *fileToc = fopen(szTocFileName, "rt");
 	if (!fileToc) {
@@ -290,7 +290,7 @@ int LuaObfuscator::readAddonGlobalExcludeFunctions(const char *szGlobalExcludeFu
 	return res;
 }
 
-char* getOperand(char *szData, int *pnLen, bool bLeftOperand) {
+char* getOperand(char *szData, ptrdiff_t *pnLen, bool bLeftOperand) {
 	char *p = szData;
 	char *res;
 
@@ -323,10 +323,9 @@ char* getOperand(char *szData, int *pnLen, bool bLeftOperand) {
  *      |
  *    *szData
  */
-int getGlobalFunctionName(char **szData, char *szFun) {
+ptrdiff_t getGlobalFunctionName(char **szData, char *szFun) {
 	char *p = *szData - 1;
-	bool bLocal = false;
-	int len = 0;
+	ptrdiff_t len = 0;
 
 	szFun[0] = 0;
 	char *pOp = getOperand(p, &len, true);
@@ -337,8 +336,6 @@ int getGlobalFunctionName(char **szData, char *szFun) {
 		--p;
 	while (isAlphaFun(*p))
 		--p;
-	if (!strncmp(p+1, "local", 5))
-		bLocal = true;
 
 	*szData += 8; // strlen("function")
 	p = *szData;
@@ -387,7 +384,7 @@ int LuaObfuscator::readGlobalFunctions(const char *szFileName, FakeFunctions &gl
 	char *data = data_s + 5;
 
 	rewind(file);
-	int realSize = fread(data, 1, size, file);
+	size_t realSize = fread(data, 1, size, file);
 	memset(data + realSize, 0, 5);
 	char *p = data;
 	while (*p) {
@@ -399,7 +396,7 @@ int LuaObfuscator::readGlobalFunctions(const char *szFileName, FakeFunctions &gl
 		if (*((unsigned long*)p) == 0x636E7566) { // 'cnuf' backview 'func'
 			if (!strncmp(p, "function", 8)) {
 				char szFun[200];
-				int trancSpaces = getGlobalFunctionName(&p, szFun);
+				ptrdiff_t trancSpaces = getGlobalFunctionName(&p, szFun);
 				if (trancSpaces && szFun[0]) {
 					stObfuscatedName fun;
 					fun.name = szFun;
@@ -450,7 +447,7 @@ bool isFunctionNameInCode(char *pStart, char *pEnd1) {
  * ---------------------
  * therefore function name is near '(' and ')'
  */
-int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunctions,
+ptrdiff_t replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunctions,
 	const StringList &excludeFunctions)
 {
 	if (!szFileName || !szFileName[0])
@@ -467,7 +464,7 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunction
 	memset(pDataInSource, 0, 10);
 	char *pDataIn = pDataInSource + 10; // for delete/clear data
 
-	int realSize = fread(pDataIn, 1, size, file);
+	size_t realSize = fread(pDataIn, 1, size, file);
 	memset(pDataIn + realSize, 0, 10);
 
 	fclose(file);
@@ -514,7 +511,6 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunction
 		++p;
 	}
 
-
 	file = fopen(szFileName, "wt");
 	const std::string& str = stream.str();
 	size_t obfuscateSize = str.length();
@@ -530,9 +526,9 @@ int replaceGlobalFunctions(const char *szFileName, FakeFunctions &globalFunction
 	return obfuscateSize - realSize;
 }
 
-int LuaObfuscator::obfuscateGlobalFunctionNames() {
+ptrdiff_t LuaObfuscator::obfuscateGlobalFunctionNames() {
 	FakeFunctions globalFunctions;
-	int size = 0;
+	ptrdiff_t size = 0;
 	char szFileNameNew[MAX_PATH];
 
 	// read global functions
@@ -623,14 +619,11 @@ const char* LuaObfuscator::generateObfuscatedLocalVariableName() {
 char* readAndSkipLocalVariables(char *p, StringStream &stream, ObfuscatedItems &vars)
 {
 	char *pEqual = strchr(p, '=');
-	char cEqual = '=';
 	if (!pEqual) {
 		pEqual = strchr(p, ';');
-		cEqual = ';';
 	}
 	else if (!pEqual) {
 		pEqual = strchr(p, '\n');
-		cEqual = '\n';
 	}
 	else if (!pEqual) {
 		print("Syntax error\n");
@@ -936,7 +929,7 @@ inline bool equalString(char *p, const char *szString, size_t size, const char *
  *
  * return:
  *   first byte after block's body
- * 
+ *
  * varsStackBlock  -- local variables in block
  * varsStackParent -- local variables in parent block
  * localModuleVars -- local variables in module
@@ -1128,7 +1121,7 @@ char* obfuscateLocalVarsInBlock(StringStream& stream, char *pBlockBodyStart,
  *   local varName = 123
  *   local abrakadabra = 123
  */
-int LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode) {
+ptrdiff_t LuaObfuscator::obfuscateLocalVarsAndParameters(const char *szLuaCode, StringStream &obfuscatedLuaCode) {
 	LocalVarsStack localVarsStackBlock;
 	LocalVarsStack localModuleVars;
 	int level = 0;
@@ -1225,33 +1218,53 @@ bool parseNumber(char** pp, char *szNumber) {
 	return false;
 }
 
+static inline bool IsEscapedChar(char ch) {
+
+
+}
+
 /*
  * Obfuscate the single string start with <p> and <size> bytes count
  * into <stream>
  */
 void LuaObfuscator::obfuscateSingleString(StringStream &stream, const char *p, size_t size) {
-	const char *szEscapeSec = "abftvrn\"\'\\";
+	// 0x07 0x08 0x0C 0x0A 0x0D 0x09 0x0B 0x57 0x27 0x22
+	// 0x07 0x08 0x09 0x0A 0x0B 0x0C 0x0D 0x22 0x27 0x57
+	// 0x07 .. 0x0D, 0x22, 0x27, 0x57
+	/* TODO:
+	a = "str"\
+	"str";
+	print(a); => strstr;
+	*/
+	const char *szEscapedChars     = "abfnrtv\'\"\\"; // 10 chars
+	const char arrEscapedChars[10] = {'\a', '\b', '\f', '\n', '\r', '\t', '\v', '\'', '\"', '\\'};
 
-	while (*p && size) {
-		bool bBackslash   = (*p == '\\' && *(p + 1) == '\\');
-		bool bEscapeChars = (*p == '\\' && strchr(szEscapeSec, *(p + 1)));
-
-		if (bBackslash || bEscapeChars) {
+	const char* pEnd = p + size;
+	while (*p && p < pEnd) {
+		const char* pEscapedChar = strchr(szEscapedChars, p[1]);
+		if (*p == '\\' && pEscapedChar) {
+			unsigned int code = static_cast<unsigned int>(arrEscapedChars[pEscapedChar - szEscapedChars]);
+			stream << '\\' << code;
+			p += 2;
+			continue;
+		}
+		else if (*p == '\\' && (isdigit(p[1]))) { // decimal code, length <= 3 chars
+			stream << '\\';
 			++p;
-			--size;
-		}
-		else if (*p == '\\' && size >= 4) {
-			bool bDigit = isdigit(*(p + 1)) && isdigit(*(p + 2)) && isdigit(*(p + 3));
-			if (bDigit) {
-				stream.write(p, 4);
-				p += 4;
-				size -= 4;
-				continue;
+			int i = 0;
+			do {
+				stream << *p;
+				++p;
+				++i;
 			}
+			while (i < 3 && isdigit(*p));
+			continue;
 		}
+	/*	else if (*p == '\\' && p[1] == 'x' && (isdigit(p[1]))) { // hex code, <= 2 chars, in lua 5.2?
+
+		}*/
 		unsigned int code = static_cast<unsigned int>(static_cast<unsigned char>(*p));
 		stream << '\\' << code;
-		--size;
 		++p;
 	}
 }
@@ -1288,7 +1301,7 @@ int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 	const bool bInt, const bool bFloat, const bool bString)
 {
 	int size = 0;
-	char szNumber[100];
+//	char szNumber[100];
 
 	StringStream &stream = obfuscatedLuaCode;
 
@@ -1312,7 +1325,7 @@ int LuaObfuscator::obfuscateConst(const char *szLuaCode,
 		if (isSingleStringStart(p)) {
 			size_t size = skipStringAndMove(&p, NULL);
 			if (bString) {
-				stream << *(p - size);
+				stream << *(p - size); // push " or '
 				obfuscateSingleString(stream, p - size + 1, size - 2);
 				stream << *(p - 1);
 			}
@@ -1361,7 +1374,6 @@ int LuaObfuscator::addFalseComment() {
 	// read global functions
 	StringListConstIter iter = m_luaFiles.begin();
 	while (iter != m_luaFiles.end()) {
-		const char *szFileName = getFileName(iter);
 		FILE *file = fopen(iter->c_str(), "rt");
 		if (!file) {
 			print("File not found: %s", iter->c_str());
@@ -1374,7 +1386,7 @@ int LuaObfuscator::addFalseComment() {
 		char *pDataInSource = new char[fileSize + 20];
 		char *pDataIn = pDataInSource + 10;
 		memset(pDataInSource, 0, 10);
-		int realSize = fread(pDataIn, sizeof(char), fileSize, file);
+		size_t realSize = fread(pDataIn, sizeof(char), fileSize, file);
 		memset(pDataIn + realSize, 0, 10);
 		fclose(file);
 
@@ -1398,7 +1410,7 @@ int LuaObfuscator::addFalseComment() {
 			}
 			if (strchr(";,\n+*/%^", *p)) {
 				char szAddComment[100];
-				int len = generateFalseComment(szAddComment);
+				size_t len = generateFalseComment(szAddComment);
 				fwrite(szAddComment, 1, len, file);
 				fputc(*p, file);
 				++p;
@@ -1442,14 +1454,14 @@ void SaveToFile(const char *data, char const *szFile, char *postfix)
 	FILE *f = fopen(buf, "wt");
 	if (f)
 	{
-		int len = strlen(data);
+		size_t len = strlen(data);
 		len = fwrite(data, 1, len, f);
 		fclose(f);
 	}
 }
 #endif
 
-void printObfuscateResilt(const char *szResultName, const int commentSize) {
+inline void printObfuscateResilt(const char *szResultName, ptrdiff_t commentSize) {
 	const int width = 35;
 
 	print("%-*s: %+d\n", width, szResultName, commentSize);
@@ -1463,8 +1475,9 @@ void printObfuscateResilt(const char *szResultName, const int commentSize) {
 int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 	FILE *fileNew, *fileOld;
 	char szFileNameNew[FILENAME_MAX];
-	int commentSize, spaceSize, newLineSize, duplicateCharsSize;
-	int localVarsSize, constIntSize, constFloatSize, constStringSize;
+	ptrdiff_t commentSize, spaceSize, newLineSize, duplicateCharsSize;
+	ptrdiff_t localVarsSize;
+	size_t constIntSize, constFloatSize, constStringSize;
 
 	if (m_luaFiles.empty())
 		return 0;
@@ -1587,7 +1600,6 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 		const std::string &sTmp = strOut.str();
 		const char *p = sTmp.c_str(); // TODO: correct code
 		size_t lenCstr = strlen(p);
-		size_t lenStream = sTmp.length(); // BAG: length difference!
 		fwrite(p, 1, lenCstr, fileNew);
 
 		delete[] pDataInSource;
@@ -1605,7 +1617,7 @@ int LuaObfuscator::obfuscate(const stObfuscatorSetting &settings) {
 
 	if (settings.ObfuscateGlobalFunctionName) {
 		print("\nObfuscate global functions\n");
-		int globalFunctionSize = obfuscateGlobalFunctionNames();
+		ptrdiff_t globalFunctionSize = obfuscateGlobalFunctionNames();
 		print("size: %+d\n", globalFunctionSize);
 	}
 

@@ -2,6 +2,7 @@
 #include "global.h"
 #include "obfuscator.h"
 #include <time.h>
+#include <stdio.h>
 
 //void printHelp();
 //int parseArguments(int argc, char *argv[], std::string &globalExcludeFunctionFileName);

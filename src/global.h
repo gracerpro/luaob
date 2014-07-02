@@ -4,10 +4,6 @@
 #include <windows.h>
 #include <stdint.h>
 
-#if defined _WIN32
-	#pragma warning(disable:4996)
-#endif
-
 const char* getExeDir();
 const char* getExeFileName();
 const char* getWorkDir();

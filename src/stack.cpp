@@ -61,12 +61,10 @@ void LocalVarsStack::pops(size_t elementCount) {
 }
 
 LocalVarsStack& operator+= (LocalVarsStack& stackDest, const LocalVarsStack& stackSource) {
-	int top = stackSource.getTopIndex();
-	int i = 0;
+	size_t top = stackSource.getTopIndex();
 
-	while (i <= top) {
+	for (size_t i = 0; i <= top; ++i) {
 		stackDest.push(stackSource.items(i));
-		++i;
 	}
 
 	return stackDest;
@@ -94,7 +92,7 @@ bool LocalVarsStack::find(stObfuscatedName& obfuscatedName) const {
 	if (!m_count)
 		return false;
 
-	int top = m_count - 1;
+	ptrdiff_t top = m_count - 1;
 	while (top >= 0) {
 		if (m_data[top].name == obfuscatedName.name) {
 			obfuscatedName.fake_name = m_data[top].fake_name;
@@ -113,7 +111,7 @@ stObfuscatedName& LocalVarsStack::top() const {
 	return m_data[m_count - 1];
 }
 
-int LocalVarsStack::getTopIndex() const {
+size_t LocalVarsStack::getTopIndex() const {
 	return m_count - 1;
 }
 

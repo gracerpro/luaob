@@ -1,5 +1,6 @@
 #include "global.h"
 #include <stdarg.h>
+#include <ctype.h>
 #include <stdio.h>
 #ifdef _WIN32
 	#include <io.h>

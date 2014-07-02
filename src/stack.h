@@ -20,7 +20,7 @@ public:
 	friend LocalVarsStack& operator+= (LocalVarsStack& stackDest, const LocalVarsStack& stackSource);
 
 	stObfuscatedName& top() const;
-	int getTopIndex() const;
+	size_t getTopIndex() const;
 	
 	stObfuscatedName& items(const size_t index) const;
 	
