@@ -1,8 +1,12 @@
 /bin/*
 !/bin/main_test.lua
 !/bin/test.lua
-/ide/VC100/*
 
-!/ide/VC100/*.sln
-!/ide/VC100/*.filters
-!/ide/VC100/*.vcxproj
+build/VisualStudio/*
+!build/VisualStudio/*.filters
+!build/VisualStudio/*.vcxproj
+
+build/codeblocks/
+
+*.suo
+*.sdf
