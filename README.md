@@ -1,10 +1,10 @@
-#Name
+# Name
 luaob -- obfuscator of Lua code.
 
-#Decsription
+# Decsription
 Obfuscator for **valid** Lua code. Target code is WoW's Lua and may be read the *.toc file of Addon, but if included files are *.lua.
 
-#Features
+# Features
 * [always] Remove comments
 * [always] Remove duplicated chars (' ', '\n', '\t', '0x160')
 * [always] Remove extra whitespace
@@ -14,16 +14,16 @@ Obfuscator for **valid** Lua code. Target code is WoW's Lua and may be read the 
 * Replace string value to complex expression (escapes codes)
 * Add false comment
 
-TODO:
+## TODO:
 * Replace integer number to complex expression
 * Replace float number to complex expression
 * Add false code
 
-#Synopsis
+# Synopsis
 luaob [-t toc_file_name] [-gef global_exclude_functions_file_name] [-a FILE] [-dir DIRECTORY]
 [-opt-one_file] [-between_lines line_count] [-opt-add_false_code] [-opt-add_false_comment] [-opt-const_float] [-opt-const_int] [-opt-const_string] [-opt-global_function] [-opt-local_function] [-opt-local_vars_args]
 
-#Options
+# Options
 * **-t tocFileName** (The file name of *.toc file)
 * **-gef globalExcludeFunctionsFileName** (The file name of file, included global function names which must be exclude from obfuscating)
 * **-a FILE** (*.lua file name)
@@ -40,13 +40,11 @@ luaob [-t toc_file_name] [-gef global_exclude_functions_file_name] [-a FILE] [-d
 * **-opt-local_vars_args** (If this option is sets then will be obfuscate local variables and arguments, default false)
 
 
-#Version
+# Version
 luaob 1.0
 
-#Compare
-[https://github.com/mlnlover11/XFuscator]
-
-[http://luasrcdiet.luaforge.net/]
-
-[http://www.lualearners.org/forum/3869]
+# Compare
+- [https://github.com/mlnlover11/XFuscator](https://github.com/mlnlover11/XFuscator)
+- [http://luasrcdiet.luaforge.net/](http://luasrcdiet.luaforge.net/)
+- [http://www.lualearners.org/forum/3869](http://www.lualearners.org/forum/3869)
 
